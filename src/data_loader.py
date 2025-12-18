@@ -6,7 +6,8 @@ from typing import Iterable, List, Optional, Sequence
 import pandas as pd
 
 
-DATA_DIR = "data"
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DATA_DIR = os.path.join(ROOT_DIR, "data")
 DEFAULT_YEARS: List[int] = [2020, 2021, 2022, 2023, 2024]
 YEAR_PATTERN = re.compile(r"NBA_(\d{4})_Shots\.csv$", re.IGNORECASE)
 
