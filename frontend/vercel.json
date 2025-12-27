@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://shotiq-pjwj.onrender.com/api/:path*"
+      "destination": "https://shotiq-mo2p.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
