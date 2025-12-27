@@ -26,3 +26,8 @@ Thumbs.db
 # Node
 node_modules/
 dist/
+data/supabase_chunks/
+data/shots_for_supabase.csv
+
+data/supabase_chunks/
+data/shots_for_supabase.csv
