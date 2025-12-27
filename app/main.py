@@ -57,11 +57,12 @@ def _warm_model():
 @lru_cache(maxsize=1)
 def _load_shots_data():
     """Load the cleaned shots data for player queries."""
-    import os
-    data_path = os.path.join(os.path.dirname(__file__), "..", "data", "nba_shots_clean.csv")
-    if os.path.exists(data_path):
-        return pd.read_csv(data_path)
-    return pd.DataFrame()
+    from src.data_loader import load_clean
+    try:
+        return load_clean()
+    except FileNotFoundError:
+        print("Warning: No clean data file found. Player queries will be empty.")
+        return pd.DataFrame()
 
 
 def _get_player_stats(df: pd.DataFrame, player_name: str, years: Optional[List[int]] = None) -> dict:
