@@ -427,6 +427,7 @@ body::before {
   background: linear-gradient(135deg, rgba(255, 107, 44, 0.08), rgba(0, 212, 255, 0.05));
   border-radius: var(--radius-md);
   padding: 1px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
 }
 
 .search__icon {
@@ -477,11 +478,8 @@ body::before {
 .player-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: var(--space-4);
-  background: radial-gradient(circle at 10% 20%, rgba(255, 107, 44, 0.08), transparent 40%),
-              radial-gradient(circle at 90% 80%, rgba(0, 212, 255, 0.08), transparent 35%),
-              var(--bg-base);
+  background: linear-gradient(145deg, rgba(255, 107, 44, 0.08), rgba(0, 212, 255, 0.06));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -489,6 +487,7 @@ body::before {
   position: relative;
   overflow: hidden;
   animation: floatUp 0.35s ease;
+  gap: var(--space-3);
 }
 
 .player-item:hover {
@@ -503,19 +502,64 @@ body::before {
   box-shadow: 0 0 0 1px rgba(255, 107, 44, 0.35), 0 12px 28px rgba(255, 107, 44, 0.12);
 }
 
+.player-item::before {
+  content: "";
+  width: 6px;
+  height: 70%;
+  background: linear-gradient(180deg, var(--neon-orange), var(--neon-blue));
+  border-radius: var(--radius-full);
+  opacity: 0.75;
+  transition: height var(--transition-base), opacity var(--transition-base);
+}
+
+.player-item:hover::before,
+.player-item--selected::before {
+  height: 85%;
+  opacity: 1;
+}
+
+.player-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .player-item__name {
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 700;
+  font-size: 1rem;
   letter-spacing: -0.01em;
 }
 
-.player-item__stats {
+.player-item__meta {
   display: flex;
-  gap: var(--space-4);
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-full);
   font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,0.04);
   color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
-  opacity: 0.9;
+}
+
+.pill--shots {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.pill--fg {
+  color: var(--neon-blue);
+  border-color: rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.08);
 }
 
 /* Stat Cards */

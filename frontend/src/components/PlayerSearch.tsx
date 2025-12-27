@@ -61,10 +61,12 @@ export function PlayerSearch({
               }`}
               onClick={() => onSelect(player)}
             >
-              <span className="player-item__name">{player.name}</span>
-              <div className="player-item__stats">
-                <span>{player.total_shots.toLocaleString()} shots</span>
-                <span>{(player.fg_pct * 100).toFixed(1)}%</span>
+              <div className="player-item__info">
+                <div className="player-item__name">{player.name}</div>
+                <div className="player-item__meta">
+                  <span className="pill pill--shots">{player.total_shots.toLocaleString()} shots</span>
+                  <span className="pill pill--fg">{(player.fg_pct * 100).toFixed(1)}%</span>
+                </div>
               </div>
             </div>
           ))}

@@ -6,6 +6,8 @@ A machine learning-powered web application that predicts NBA shot success probab
 ![React](https://img.shields.io/badge/React-18+-61DAFB.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)
 ![XGBoost](https://img.shields.io/badge/XGBoost-ML-orange.svg)
+![Supabase](https://img.shields.io/badge/Data-Supabase-3FCF8E.svg)
+![Redis](https://img.shields.io/badge/Cache-Redis-DC382D.svg)
 
 ## 🎯 What is ShotIQ?
 
@@ -132,8 +134,14 @@ python scripts/retrain_model.py
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│                    ML Model (XGBoost)                    │
-│                   shot_model_xgb.pkl                     │
+│        Data (Supabase)         │   ML Model (XGBoost)    │
+│      shots table + RPCs        │   shot_model_xgb.pkl    │
+└─────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────┐
+│                 Cache (Redis, optional)                 │
+│   Speeds up players/years/stats for new visitors        │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -161,6 +169,9 @@ pip install -r requirements.txt
 
 # Start the API server
 uvicorn app.main:app --reload --port 8000
+
+# Optional: provide Redis for caching (recommended in prod)
+export REDIS_URL="rediss://default:<password>@<host>:<port>"
 ```
 
 ### Frontend Setup
@@ -178,6 +189,22 @@ npm run dev
 
 Visit `http://localhost:5173` to see the app!
 
+### Production notes
+- **Supabase**: set `SUPABASE_URL` and `SUPABASE_KEY` (service role) so the API can read the `shots` table and call the RPCs.
+- **Redis caching**: set `REDIS_URL` (e.g., Upstash/Redis Cloud) to cache players/years/stats responses for faster first-loads. If unset, the API falls back to an in-process cache.
+- **Model file**: ensure `models/shot_model_xgb.pkl` is present in the deploy.
+
+## 🔌 Supabase schema & functions
+
+### Table
+`shots` table with columns:
+- `player_name` (text), `team_name` (text), `loc_x` (real), `loc_y` (real), `shot_made_flag` (smallint), `shot_distance` (real), `shot_type` (text), `action_type` (text), `year` (smallint)
+
+### RPCs
+- `get_players_with_stats(search_term text, min_shot_count int, result_limit int)` – used by `/api/players`
+- `get_available_years()` – used by `/api/years`
+- `get_player_stats(p_player_name text, p_years int[])` – used by `/api/player/{name}` and `/api/compare`
+
 ## 📡 API Endpoints
 
 | Endpoint | Method | Description |
@@ -189,6 +216,8 @@ Visit `http://localhost:5173` to see the app!
 | `/api/player/{name}/shots` | GET | Get player's shot data |
 | `/api/years` | GET | Get available seasons |
 | `/api/compare` | POST | Compare two players |
+| **Data** |  | Stored in Supabase (`shots` table + RPCs `get_players_with_stats`, `get_player_stats`, `get_available_years`) |
+| **Cache** |  | Redis (optional). Set `REDIS_URL` to cache common reads. Falls back to in-process cache if unset. |
 
 ### Example: Predict a Shot
 
@@ -298,4 +327,3 @@ nba-shot-predictor/
 This project is for educational purposes. NBA data is property of the NBA.
 
 ---
-
