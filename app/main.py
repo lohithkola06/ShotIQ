@@ -56,10 +56,35 @@ def _warm_model():
 
 @lru_cache(maxsize=1)
 def _load_shots_data():
-    """Load the cleaned shots data for player queries."""
-    from src.data_loader import load_clean
+    """Load the cleaned shots data for player queries - optimized for memory."""
+    from src.data_loader import load_clean, CLEAN_CSV_PATH, _ensure_clean_csv_exists
+    
+    # Only load columns we actually need
+    NEEDED_COLUMNS = [
+        "PLAYER_NAME", "TEAM_NAME", "LOC_X", "LOC_Y", 
+        "SHOT_MADE_FLAG", "SHOT_DISTANCE", "SHOT_TYPE", "ACTION_TYPE", "YEAR"
+    ]
+    
     try:
-        return load_clean()
+        _ensure_clean_csv_exists()
+        # Load only needed columns with optimized dtypes
+        df = pd.read_csv(
+            CLEAN_CSV_PATH,
+            usecols=NEEDED_COLUMNS,
+            dtype={
+                "PLAYER_NAME": "category",
+                "TEAM_NAME": "category",
+                "SHOT_TYPE": "category",
+                "ACTION_TYPE": "category",
+                "LOC_X": "float32",
+                "LOC_Y": "float32",
+                "SHOT_DISTANCE": "float32",
+                "SHOT_MADE_FLAG": "int8",
+                "YEAR": "int16",
+            }
+        )
+        print(f"Loaded {len(df):,} shots, memory: {df.memory_usage(deep=True).sum() / 1024 / 1024:.1f} MB")
+        return df
     except FileNotFoundError:
         print("Warning: No clean data file found. Player queries will be empty.")
         return pd.DataFrame()
