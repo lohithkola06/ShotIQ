@@ -1,160 +1,127 @@
-import { useMemo, useState } from "react";
-import { predictGrid, predictShot, GridRequest, ShotRequest } from "./api";
-import { Court } from "./components/Court";
-import { HeatmapPreview } from "./components/HeatmapPreview";
+import { useState } from "react";
+import { Player } from "./api";
+import { PlayerSearch } from "./components/PlayerSearch";
+import { PlayerStats } from "./components/PlayerStats";
+import { PredictPanel } from "./components/PredictPanel";
+import { CompareView } from "./components/CompareView";
 
-const defaultShot: ShotRequest = {
-  LOC_X: 0,
-  LOC_Y: 10,
-  YEAR: 2024,
-  SHOT_TYPE: "3PT Field Goal",
-  ACTION_TYPE: "Jump Shot",
-};
+type Tab = "players" | "predict" | "compare";
 
-const defaultGrid: GridRequest = {
-  x_min: -30,
-  x_max: 30,
-  y_min: -10,
-  y_max: 80,
-  x_steps: 50,
-  y_steps: 50,
-  YEAR: 2024,
-  SHOT_TYPE: "3PT Field Goal",
-  ACTION_TYPE: "Jump Shot",
-};
-
-function numberInput(label: string, value: number, onChange: (n: number) => void) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-      />
-    </label>
-  );
-}
-
-function textInput(label: string, value: string, onChange: (s: string) => void) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} />
-    </label>
-  );
-}
+const NAV_ITEMS: { id: Tab; label: string; icon: string }[] = [
+  { id: "players", label: "Players", icon: "🏀" },
+  { id: "predict", label: "Predict", icon: "🎯" },
+  { id: "compare", label: "Compare", icon: "⚔️" },
+];
 
 export default function App() {
-  const [shot, setShot] = useState<ShotRequest>(defaultShot);
-  const [gridReq, setGridReq] = useState<GridRequest>(defaultGrid);
-  const [prob, setProb] = useState<number | null>(null);
-  const [gridData, setGridData] = useState<number[]>([]);
-  const [gridMeta, setGridMeta] = useState<{ xs: number; ys: number }>({ xs: 0, ys: 0 });
-  const [loadingShot, setLoadingShot] = useState(false);
-  const [loadingGrid, setLoadingGrid] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handlePredictShot = async () => {
-    setError(null);
-    setLoadingShot(true);
-    try {
-      const res = await predictShot(shot);
-      setProb(res.probability_make);
-    } catch (e: any) {
-      setError(e.message || "Shot prediction failed");
-    } finally {
-      setLoadingShot(false);
-    }
-  };
-
-  const handlePredictGrid = async () => {
-    setError(null);
-    setLoadingGrid(true);
-    try {
-      const res = await predictGrid(gridReq);
-      setGridData(res.probabilities);
-      setGridMeta({ xs: gridReq.x_steps ?? 0, ys: gridReq.y_steps ?? 0 });
-    } catch (e: any) {
-      setError(e.message || "Grid prediction failed");
-    } finally {
-      setLoadingGrid(false);
-    }
-  };
-
-  const heatmapMatrix = useMemo(() => {
-    if (!gridMeta.xs || !gridMeta.ys) return [];
-    const out: number[][] = [];
-    for (let i = 0; i < gridMeta.ys; i++) {
-      const row = gridData.slice(i * gridMeta.xs, (i + 1) * gridMeta.xs);
-      out.push(row);
-    }
-    return out;
-  }, [gridData, gridMeta]);
+  const [activeTab, setActiveTab] = useState<Tab>("players");
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
   return (
-    <div className="app">
-      <header>
-        <h1>NBA Shot Make Predictor</h1>
-        <p>Model-driven shot probabilities and expected FG% heatmaps.</p>
+    <div className="app-container">
+      {/* Header */}
+      <header className="site-header">
+        <div className="site-header__brand">
+          <span className="site-header__logo">🏀</span>
+          <span className="site-header__title">ShotIQ</span>
+        </div>
+        
+        <nav className="site-header__nav">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              className={`site-header__nav-btn ${activeTab === item.id ? "active" : ""}`}
+              onClick={() => setActiveTab(item.id)}
+            >
+              <span className="site-header__nav-icon">{item.icon}</span>
+              <span className="site-header__nav-label">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="site-header__meta">
+          <span className="site-header__seasons">2004–2024</span>
+        </div>
       </header>
 
-      {error && <div className="error">{error}</div>}
-
-      <div className="panels">
-        <section className="panel">
-          <h2>Shot Inputs</h2>
-          <div className="grid-2">
-            {numberInput("LOC_X", shot.LOC_X, (n) => setShot({ ...shot, LOC_X: n }))}
-            {numberInput("LOC_Y", shot.LOC_Y, (n) => setShot({ ...shot, LOC_Y: n }))}
-            {numberInput("YEAR", shot.YEAR ?? 2024, (n) => setShot({ ...shot, YEAR: n }))}
-            {numberInput(
-              "SHOT_DISTANCE",
-              shot.SHOT_DISTANCE ?? Math.sqrt(shot.LOC_X ** 2 + shot.LOC_Y ** 2),
-              (n) => setShot({ ...shot, SHOT_DISTANCE: n })
-            )}
-            {textInput("SHOT_TYPE", shot.SHOT_TYPE || "", (s) => setShot({ ...shot, SHOT_TYPE: s }))}
-            {textInput("ACTION_TYPE", shot.ACTION_TYPE || "", (s) =>
-              setShot({ ...shot, ACTION_TYPE: s })
-            )}
-          </div>
-          <button onClick={handlePredictShot} disabled={loadingShot}>
-            {loadingShot ? "Predicting..." : "Predict Shot Make"}
-          </button>
-          {prob !== null && (
-            <div className="result">
-              Probability of Make: <strong>{(prob * 100).toFixed(1)}%</strong>
+      {/* Main Content */}
+      <main className="main-content">
+        {activeTab === "players" && (
+          <div className="grid grid--sidebar fade-in">
+            <div className="card">
+              <div className="card__header">
+                <h2 className="card__title">Select Player</h2>
+              </div>
+              <PlayerSearch
+                onSelect={setSelectedPlayer}
+                selectedPlayer={selectedPlayer}
+              />
             </div>
-          )}
-        </section>
 
-        <section className="panel">
-          <h2>Expected FG% Heatmap</h2>
-          <div className="grid-3">
-            {numberInput("x_min", gridReq.x_min ?? -30, (n) => setGridReq({ ...gridReq, x_min: n }))}
-            {numberInput("x_max", gridReq.x_max ?? 30, (n) => setGridReq({ ...gridReq, x_max: n }))}
-            {numberInput("x_steps", gridReq.x_steps ?? 50, (n) => setGridReq({ ...gridReq, x_steps: n }))}
-            {numberInput("y_min", gridReq.y_min ?? -10, (n) => setGridReq({ ...gridReq, y_min: n }))}
-            {numberInput("y_max", gridReq.y_max ?? 80, (n) => setGridReq({ ...gridReq, y_max: n }))}
-            {numberInput("y_steps", gridReq.y_steps ?? 50, (n) => setGridReq({ ...gridReq, y_steps: n }))}
-            {textInput("SHOT_TYPE", gridReq.SHOT_TYPE || "", (s) => setGridReq({ ...gridReq, SHOT_TYPE: s }))}
-            {textInput("ACTION_TYPE", gridReq.ACTION_TYPE || "", (s) =>
-              setGridReq({ ...gridReq, ACTION_TYPE: s })
-            )}
-            {numberInput("YEAR", gridReq.YEAR ?? 2024, (n) => setGridReq({ ...gridReq, YEAR: n }))}
+            <div className="card">
+              {selectedPlayer ? (
+                <>
+                  <div className="card__header">
+                    <h2
+                      className="card__title"
+                      style={{
+                        fontSize: "1.4rem",
+                        background: "linear-gradient(135deg, var(--neon-orange), #ffaa00)",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        backgroundClip: "text",
+                      }}
+                    >
+                      {selectedPlayer.name}
+                    </h2>
+                  </div>
+                  <PlayerStats playerName={selectedPlayer.name} />
+                </>
+              ) : (
+                <div className="empty-state">
+                  <div className="empty-state__icon">🏀</div>
+                  <div className="empty-state__title">Select a player</div>
+                  <p>Choose a player from the list to view their shot analysis</p>
+                </div>
+              )}
+            </div>
           </div>
-          <button onClick={handlePredictGrid} disabled={loadingGrid}>
-            {loadingGrid ? "Generating..." : "Generate Heatmap"}
-          </button>
-          <HeatmapPreview matrix={heatmapMatrix} />
-        </section>
-      </div>
+        )}
 
-      <section className="panel">
-        <h2>Court (Reference)</h2>
-        <Court />
-      </section>
+        {activeTab === "predict" && <PredictPanel />}
+
+        {activeTab === "compare" && <CompareView />}
+      </main>
+
+      {/* Footer */}
+      <footer className="site-footer">
+        <div className="site-footer__content">
+          <div className="site-footer__brand">
+            <span className="site-footer__logo">🏀</span>
+            <span className="site-footer__title">ShotIQ</span>
+            <span className="site-footer__tagline">NBA Shot Analysis Platform</span>
+          </div>
+          
+          <div className="site-footer__info">
+            <div className="site-footer__stat">
+              <span className="site-footer__stat-value">3.6M+</span>
+              <span className="site-footer__stat-label">Shots Analyzed</span>
+            </div>
+            <div className="site-footer__stat">
+              <span className="site-footer__stat-value">18</span>
+              <span className="site-footer__stat-label">Seasons</span>
+            </div>
+            <div className="site-footer__stat">
+              <span className="site-footer__stat-value">XGBoost</span>
+              <span className="site-footer__stat-label">ML Model</span>
+            </div>
+          </div>
+
+          <div className="site-footer__credits">
+            <p>Powered by machine learning • Data from 2004–2019, 2023–2024 NBA seasons</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
-

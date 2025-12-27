@@ -6,4 +6,6 @@ scikit-learn
 jupyter
 xgboost
 fastapi
-uvicorn
+uvicorn[standard]
+joblib
+python-multipart

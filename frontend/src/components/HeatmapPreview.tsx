@@ -1,55 +1,90 @@
-type HeatmapPreviewProps = {
+interface HeatmapPreviewProps {
   matrix: number[][];
-};
+}
 
-const colors = ["#2c2c54", "#3a5fcd", "#12d8c4", "#f2d57c", "#f58518"];
+const COLORS = [
+  "#0d0d12",
+  "#1a1a40",
+  "#1e3a8a",
+  "#0891b2",
+  "#22c55e",
+  "#eab308",
+  "#f97316",
+  "#ef4444",
+  "#dc2626",
+];
 
-function interpColor(value: number) {
-  if (Number.isNaN(value) || value === undefined) return "#0b0c10";
-  const v = Math.min(1, Math.max(0, value));
-  const idx = Math.floor(v * (colors.length - 1));
-  const t = v * (colors.length - 1) - idx;
-  const c1 = colors[idx];
-  const c2 = colors[Math.min(colors.length - 1, idx + 1)];
-  // simple channel lerp
-  const hex = (c: string) =>
-    [1, 3, 5].map((i) => parseInt(c.substring(i, i + 2), 16));
-  const [r1, g1, b1] = hex(c1);
-  const [r2, g2, b2] = hex(c2);
+function interpolateColor(value: number): string {
+  if (!Number.isFinite(value)) return COLORS[0];
+  
+  const v = Math.max(0, Math.min(1, value));
+  const idx = Math.floor(v * (COLORS.length - 1));
+  const t = v * (COLORS.length - 1) - idx;
+  
+  const c1 = COLORS[idx];
+  const c2 = COLORS[Math.min(COLORS.length - 1, idx + 1)];
+  
+  const parseHex = (hex: string) =>
+    [1, 3, 5].map((i) => parseInt(hex.substring(i, i + 2), 16));
+  
+  const [r1, g1, b1] = parseHex(c1);
+  const [r2, g2, b2] = parseHex(c2);
+  
   const r = Math.round(r1 + (r2 - r1) * t);
   const g = Math.round(g1 + (g2 - g1) * t);
   const b = Math.round(b1 + (b2 - b1) * t);
+  
   return `rgb(${r},${g},${b})`;
 }
 
-export const HeatmapPreview = ({ matrix }: HeatmapPreviewProps) => {
-  if (!matrix || matrix.length === 0) {
-    return <div className="heatmap-placeholder">Heatmap will appear here</div>;
+export function HeatmapPreview({ matrix }: HeatmapPreviewProps) {
+  if (!matrix.length) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state__icon">🎯</div>
+        <div className="empty-state__title">Generate a heatmap</div>
+        <p>Visualize FG% probabilities across the court</p>
+      </div>
+    );
   }
+
   const rows = matrix.length;
-  const cols = matrix[0].length || 0;
+  const cols = matrix[0]?.length || 0;
   const cellSize = 6;
+
   return (
-    <div
-      className="heatmap"
-      style={{
-        width: cols * cellSize,
-        height: rows * cellSize,
-        gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
-      }}
-    >
-      {matrix.flat().map((v, i) => (
+    <div className="heatmap-container">
+      <div
+        className="heatmap-grid"
+        style={{
+          width: cols * cellSize,
+          height: rows * cellSize,
+          gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+        }}
+      >
+        {matrix.flat().map((val, i) => (
+          <div
+            key={i}
+            style={{
+              width: cellSize,
+              height: cellSize,
+              background: interpolateColor(val),
+            }}
+            title={`${(val * 100).toFixed(1)}%`}
+          />
+        ))}
+      </div>
+      
+      <div className="heatmap-legend">
+        <span className="heatmap-legend__label">0%</span>
         <div
-          key={i}
+          className="heatmap-legend__bar"
           style={{
-            width: cellSize,
-            height: cellSize,
-            background: interpColor(v),
+            background: `linear-gradient(to right, ${COLORS.join(", ")})`,
           }}
-          title={`P(make): ${(v * 100).toFixed(1)}%`}
         />
-      ))}
+        <span className="heatmap-legend__label">100%</span>
+      </div>
     </div>
   );
-};
-
+}
