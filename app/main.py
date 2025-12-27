@@ -229,7 +229,7 @@ def get_player(
 def get_player_shots(
     player_name: str,
     years: Optional[str] = Query(None, description="Comma-separated years"),
-    limit: int = Query(2500, description="Maximum shots to return"),
+    limit: int = Query(50000, description="Maximum shots to return"),
 ):
     """Get shot data for a player."""
     supabase = get_supabase()
@@ -248,7 +248,9 @@ def get_player_shots(
             years_list = [int(y) for y in years.split(",")]
             query = query.in_("year", years_list)
         
-        query = query.limit(limit)
+        # Supabase REST limit defaults can be low; use range to request full span
+        capped_limit = min(limit, 50000)
+        query = query.range(0, capped_limit - 1)
         result = query.execute()
         
         # Convert to uppercase keys for frontend compatibility

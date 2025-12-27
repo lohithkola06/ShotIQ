@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getPlayers, Player } from "../api";
 import { useDebounce } from "../hooks/useApi";
+import { useRef } from "react";
 
 interface PlayerSearchProps {
   onSelect: (player: Player) => void;
@@ -16,19 +17,30 @@ export function PlayerSearch({
   const [query, setQuery] = useState("");
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const activeRequest = useRef(0);
   
-  const debouncedQuery = useDebounce(query, 250);
+  const debouncedQuery = useDebounce(query, 200);
 
   useEffect(() => {
     async function fetchPlayers() {
       setLoading(true);
+      setError(null);
+      const requestId = ++activeRequest.current;
       try {
-        const res = await getPlayers(debouncedQuery, 500);
-        setPlayers(res.players);
+        const res = await getPlayers(debouncedQuery, 100);
+        // Ignore stale responses that return after a newer query
+        if (requestId === activeRequest.current) {
+          setPlayers(res.players);
+        }
       } catch (err) {
         console.error("Failed to fetch players:", err);
+        setError("Unable to load players.");
+        setPlayers([]);
       } finally {
-        setLoading(false);
+        if (requestId === activeRequest.current) {
+          setLoading(false);
+        }
       }
     }
     fetchPlayers();
@@ -44,6 +56,7 @@ export function PlayerSearch({
           placeholder={placeholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          autoComplete="off"
         />
       </div>
 
@@ -53,6 +66,11 @@ export function PlayerSearch({
         </div>
       ) : (
         <div className="player-list">
+          {error && (
+            <div className="empty-state">
+              <p>{error}</p>
+            </div>
+          )}
           {players.map((player) => (
             <div
               key={player.name}

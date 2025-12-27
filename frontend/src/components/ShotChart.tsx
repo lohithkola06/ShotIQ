@@ -29,12 +29,15 @@ export function ShotChart({ shots }: ShotChartProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const handleMouseEnter = useCallback(
-    (shot: Shot, event: React.MouseEvent, idx: number) => {
-      setTooltip({
-        shot,
-        x: event.clientX + 12,
-        y: event.clientY + 12,
-      });
+    (shot: Shot, event: React.MouseEvent<SVGCircleElement, MouseEvent>, idx: number) => {
+      const svgRect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+      if (svgRect) {
+        setTooltip({
+          shot,
+          x: event.clientX - svgRect.left + 12,
+          y: event.clientY - svgRect.top + 12,
+        });
+      }
       setHoveredIdx(idx);
     },
     []
@@ -48,8 +51,8 @@ export function ShotChart({ shots }: ShotChartProps) {
   // Scale: 1 foot = 10 SVG units
   const S = 10;
   
-  // Court height we want to show (up to ~42 feet from baseline)
-  const courtViewHeight = 42;
+  // Court height we want to show (up to half court)
+  const courtViewHeight = 47;
   
   // Viewbox dimensions
   const viewBoxX = (-COURT.width / 2) * S;
@@ -238,7 +241,7 @@ export function ShotChart({ shots }: ShotChartProps) {
 
       {/* Tooltip */}
       {tooltip && (
-        <div className="tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
+        <div className="tooltip tooltip--inset" style={{ left: tooltip.x, top: tooltip.y }}>
           <div className="tooltip__title">
             {tooltip.shot.SHOT_MADE_FLAG === 1 ? "✓ Made" : "✗ Missed"}
           </div>
