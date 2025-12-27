@@ -78,7 +78,8 @@ export function CompareView() {
         setStats1(result.player1);
         setStats2(result.player2);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Comparison failed");
+        console.error("Comparison failed:", err);
+        setError("Unable to load comparison right now. Please try again.");
       } finally {
         setLoading(false);
       }

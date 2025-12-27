@@ -21,6 +21,7 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
   const [selectedYears, setSelectedYears] = useState<number[]>([]);
   const [activeTab, setActiveTab] = useState<ViewTab>("shots");
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   // Reset selected years when player changes
   useEffect(() => {
@@ -31,6 +32,7 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
+      setHasError(false);
       try {
         const yearsParam = selectedYears.length > 0 ? selectedYears : undefined;
         const [playerData, shotsData] = await Promise.all([
@@ -47,6 +49,7 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
         }
       } catch (err) {
         console.error("Failed to load player data:", err);
+        setHasError(true);
       } finally {
         setLoading(false);
       }
@@ -69,7 +72,10 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
   }
 
   if (!stats) {
-    return <div className="error-message">Failed to load player data</div>;
+    if (hasError) {
+      return <div className="error-message">Data unavailable. Please try again.</div>;
+    }
+    return null;
   }
 
   return (
