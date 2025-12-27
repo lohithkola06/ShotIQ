@@ -759,10 +759,11 @@ body::before {
 /* Court */
 .court-wrapper {
   position: relative;
-  background: var(--bg-base);
+  background: linear-gradient(135deg, rgba(255, 107, 44, 0.06), rgba(0, 212, 255, 0.04));
   border-radius: var(--radius-lg);
   overflow: hidden;
-  aspect-ratio: 1.1;
+  aspect-ratio: 1.15;
+  box-shadow: var(--shadow-md);
 }
 
 .court-svg {
@@ -773,12 +774,18 @@ body::before {
 .shot-dot {
   cursor: pointer;
   transition: all var(--transition-fast);
+  opacity: 0.8;
 }
 
 .shot-dot:hover {
   filter: brightness(1.3);
   transform-origin: center;
+  opacity: 1;
 }
+
+.shot-dot--made { fill: #00ff88; stroke: rgba(0, 255, 136, 0.6); }
+.shot-dot--missed { fill: #ff3366; stroke: rgba(255, 51, 102, 0.6); }
+.shot-dot--active { stroke-width: 3; }
 
 /* Tooltip */
 .tooltip {
@@ -830,6 +837,7 @@ body::before {
 
 .legend-dot--made { background: var(--success); }
 .legend-dot--missed { background: var(--error); }
+.legend-dot--active { background: var(--neon-blue); }
 
 /* Buttons */
 .btn {

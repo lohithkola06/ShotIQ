@@ -26,20 +26,23 @@ export function ShotChart({ shots }: ShotChartProps) {
     x: number;
     y: number;
   } | null>(null);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const handleMouseEnter = useCallback(
-    (shot: Shot, event: React.MouseEvent) => {
+    (shot: Shot, event: React.MouseEvent, idx: number) => {
       setTooltip({
         shot,
         x: event.clientX + 12,
         y: event.clientY + 12,
       });
+      setHoveredIdx(idx);
     },
     []
   );
 
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
+    setHoveredIdx(null);
   }, []);
 
   // Scale: 1 foot = 10 SVG units
@@ -75,17 +78,38 @@ export function ShotChart({ shots }: ShotChartProps) {
         viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}`}
         preserveAspectRatio="xMidYMid meet"
       >
+        <defs>
+          <linearGradient id="courtGradient" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#11131c" />
+            <stop offset="100%" stopColor="#0c1017" />
+          </linearGradient>
+          <radialGradient id="rimGlow" cx="50%" cy="0%" r="60%">
+            <stop offset="0%" stopColor="rgba(255,107,44,0.45)" />
+            <stop offset="100%" stopColor="rgba(255,107,44,0)" />
+          </radialGradient>
+          <filter id="shotShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="rgba(0,0,0,0.5)" />
+          </filter>
+        </defs>
+
         {/* Court surface */}
         <rect
           x={viewBoxX}
           y={viewBoxY}
           width={viewBoxW}
           height={viewBoxH}
-          fill="#1a1a22"
+          fill="url(#courtGradient)"
+        />
+        <rect
+          x={viewBoxX}
+          y={viewBoxY}
+          width={viewBoxW}
+          height={viewBoxH}
+          fill="url(#rimGlow)"
         />
 
         {/* === COURT LINES === */}
-        <g stroke="#3a3a50" strokeWidth={2} fill="none">
+        <g stroke="#2f3545" strokeWidth={2} fill="none">
           
           {/* Baseline at y=0 (top of court view) */}
           <line 
@@ -178,7 +202,7 @@ export function ShotChart({ shots }: ShotChartProps) {
           y={COURT.backboardFromBaseline * S - 3} 
           width={6 * S} 
           height={5} 
-          fill="#555"
+          fill="#6b7280"
           rx={1}
         />
         
@@ -193,22 +217,23 @@ export function ShotChart({ shots }: ShotChartProps) {
         />
 
         {/* === SHOT DOTS === */}
-        {shots.map((shot, idx) => (
-          <circle
-            key={idx}
-            className="shot-dot"
-            cx={shot.LOC_X * S}
-            cy={shot.LOC_Y * S}
-            r={4}
-            fill={shot.SHOT_MADE_FLAG === 1 ? "#00ff88" : "#ff3366"}
-            fillOpacity={0.7}
-            stroke={shot.SHOT_MADE_FLAG === 1 ? "#00ff88" : "#ff3366"}
-            strokeWidth={1}
-            strokeOpacity={0.4}
-            onMouseEnter={(e) => handleMouseEnter(shot, e)}
-            onMouseLeave={handleMouseLeave}
-          />
-        ))}
+        {shots.map((shot, idx) => {
+          const isMade = shot.SHOT_MADE_FLAG === 1;
+          return (
+            <circle
+              key={idx}
+              className={`shot-dot ${isMade ? "shot-dot--made" : "shot-dot--missed"} ${
+                hoveredIdx === idx ? "shot-dot--active" : ""
+              }`}
+              cx={shot.LOC_X * S}
+              cy={shot.LOC_Y * S}
+              r={4.4}
+              onMouseEnter={(e) => handleMouseEnter(shot, e, idx)}
+              onMouseLeave={handleMouseLeave}
+              filter="url(#shotShadow)"
+            />
+          );
+        })}
       </svg>
 
       {/* Tooltip */}
@@ -241,6 +266,10 @@ export function ShotChart({ shots }: ShotChartProps) {
         <div className="legend-item">
           <div className="legend-dot legend-dot--missed" />
           <span>Missed</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-dot legend-dot--active" />
+          <span>Hover</span>
         </div>
       </div>
     </div>

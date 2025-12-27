@@ -37,7 +37,7 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
         const yearsParam = selectedYears.length > 0 ? selectedYears : undefined;
         const [playerData, shotsData] = await Promise.all([
           getPlayer(playerName, yearsParam),
-          getPlayerShots(playerName, yearsParam, 2500),
+          getPlayerShots(playerName, yearsParam, 50000),
         ]);
         setStats(playerData);
         setShots(shotsData.shots);
