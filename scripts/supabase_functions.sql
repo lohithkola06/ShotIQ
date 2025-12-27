@@ -1,4 +1,4 @@
--- Run this in Supabase SQL Editor after creating the shots table
+\-- Run this in Supabase SQL Editor after creating the shots table
 
 -- Function to get players with stats
 CREATE OR REPLACE FUNCTION get_players_with_stats(
