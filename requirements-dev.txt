@@ -1,0 +1,6 @@
+# Development dependencies (notebooks, visualization)
+-r requirements.txt
+jupyter
+matplotlib
+seaborn
+

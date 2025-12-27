@@ -1,9 +1,7 @@
+# Production dependencies
 pandas
 numpy
-matplotlib
-seaborn
 scikit-learn
-jupyter
 xgboost
 fastapi
 uvicorn[standard]
