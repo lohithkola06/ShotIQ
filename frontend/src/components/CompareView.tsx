@@ -17,10 +17,16 @@ export function CompareView() {
 
   // Common years between both players
   const commonYears = useMemo(() => {
-    if (player1Years.length === 0 || player2Years.length === 0) return [];
-    const set1 = new Set(player1Years);
-    return player2Years.filter((year) => set1.has(year)).sort((a, b) => a - b);
-  }, [player1Years, player2Years]);
+    const years1 =
+      stats1?.seasons?.map((s) => s.year) ??
+      player1Years;
+    const years2 =
+      stats2?.seasons?.map((s) => s.year) ??
+      player2Years;
+    if (!years1.length || !years2.length) return [];
+    const set1 = new Set(years1);
+    return years2.filter((year) => set1.has(year)).sort((a, b) => a - b);
+  }, [player1Years, player2Years, stats1?.seasons, stats2?.seasons]);
 
   // Load player 1's available years
   useEffect(() => {
@@ -185,7 +191,7 @@ export function CompareView() {
         </div>
       )}
 
-      {player1 && player2 && commonYears.length === 0 && !loadingYears && (
+      {player1 && player2 && commonYears.length === 0 && !loadingYears && (player1Years.length > 0 || stats1?.seasons?.length) && (player2Years.length > 0 || stats2?.seasons?.length) && (
         <div className="compare-no-common-years">
           These players have no overlapping seasons in the dataset.
         </div>

@@ -7,3 +7,5 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+      - key: REDIS_URL
+        value: ""  # e.g. rediss://default:<password>@<host>:<port>

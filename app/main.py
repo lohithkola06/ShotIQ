@@ -3,18 +3,24 @@ NBA Shot Predictor API - Using Supabase for data storage.
 """
 import os
 from functools import lru_cache
-from typing import List, Optional
+from time import monotonic
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
+try:
+    from redis import Redis
+except ImportError:
+    Redis = None  # type: ignore
 
 from src.inference import load_model, predict_single
 
 # Supabase configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://pabegzmewqavkqndmclg.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhYmVnem1ld3FhdmtxbmRtY2xnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4NjA3NTUsImV4cCI6MjA4MjQzNjc1NX0.uzlx6XpH5JkJIuO0uWfqeAD6woa1gI9fNlVrk0AyXU4")
+REDIS_URL = os.environ.get("REDIS_URL", "")
 
 app = FastAPI(title="NBA Shot Predictor API")
 
@@ -55,6 +61,59 @@ def get_supabase() -> Client:
 def _warm_model():
     return load_model()
 
+# Simple in-process cache for expensive reads (fallback when Redis unavailable)
+# Structure: { key: (expires_at, data) }
+_cache: Dict[str, Tuple[float, Any]] = {}
+
+
+@lru_cache(maxsize=1)
+def get_redis() -> Optional["Redis"]:
+    """Return Redis client if configured and library present."""
+    if not REDIS_URL or Redis is None:
+        return None
+    try:
+        client = Redis.from_url(REDIS_URL, decode_responses=True)
+        # quick ping to validate
+        client.ping()
+        return client
+    except Exception as e:
+        print(f"Redis unavailable, falling back to in-process cache: {e}")
+        return None
+
+
+def cache_get(key: str) -> Any:
+    redis_client = get_redis()
+    if redis_client:
+        try:
+            val = redis_client.get(key)
+            if val is not None:
+                import json
+                return json.loads(val)
+        except Exception as e:
+            print(f"Redis get failed for {key}: {e}")
+
+    item = _cache.get(key)
+    if not item:
+        return None
+    expires_at, data = item
+    if monotonic() > expires_at:
+        _cache.pop(key, None)
+        return None
+    return data
+
+
+def cache_set(key: str, data: Any, ttl_seconds: int) -> None:
+    redis_client = get_redis()
+    if redis_client:
+        try:
+          import json
+          redis_client.setex(key, ttl_seconds, json.dumps(data))
+          return
+        except Exception as e:
+            print(f"Redis set failed for {key}: {e}")
+
+    _cache[key] = (monotonic() + ttl_seconds, data)
+
 
 # Health check
 @app.get("/")
@@ -90,15 +149,24 @@ def get_players(
 ):
     """Get list of players with shot statistics."""
     supabase = get_supabase()
+    cache_key = f"players|{search}|{min_shots}|{limit}"
     
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return {"players": cached}
+
     try:
-        result = supabase.rpc("get_players_with_stats", {
-            "search_term": search,
-            "min_shot_count": min_shots,
-            "result_limit": limit
-        }).execute()
-        
-        return {"players": result.data or []}
+        result = supabase.rpc(
+            "get_players_with_stats",
+            {
+                "search_term": search,
+                "min_shot_count": min_shots,
+                "result_limit": limit,
+            },
+        ).execute()
+        players = result.data or []
+        cache_set(cache_key, players, ttl_seconds=300)  # 5 minutes
+        return {"players": players}
     except Exception as e:
         print(f"Error fetching players: {e}")
         return {"players": []}
@@ -108,10 +176,16 @@ def get_players(
 def get_years():
     """Get all available years in the dataset."""
     supabase = get_supabase()
+    cache_key = "years"
+
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return {"years": cached}
     
     try:
         result = supabase.rpc("get_available_years").execute()
         years = [r["year"] for r in result.data] if result.data else []
+        cache_set(cache_key, years, ttl_seconds=3600)  # 1 hour
         return {"years": sorted(years)}
     except Exception as e:
         print(f"Error fetching years: {e}")
@@ -127,6 +201,11 @@ def get_player(
     supabase = get_supabase()
     
     years_list = [int(y) for y in years.split(",")] if years else None
+    cache_key = f"player|{player_name}|{','.join(map(str, years_list)) if years_list else 'all'}"
+
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
     
     try:
         result = supabase.rpc("get_player_stats", {
@@ -135,6 +214,7 @@ def get_player(
         }).execute()
         
         if result.data:
+            cache_set(cache_key, result.data, ttl_seconds=300)
             return result.data
         else:
             raise HTTPException(status_code=404, detail=f"Player '{player_name}' not found")
@@ -154,6 +234,11 @@ def get_player_shots(
     """Get shot data for a player."""
     supabase = get_supabase()
     
+    cache_key = f"shots|{player_name}|{years or 'all'}|{limit}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         query = supabase.table("shots").select(
             "loc_x, loc_y, shot_made_flag, shot_distance, shot_type, action_type, year"
@@ -179,7 +264,9 @@ def get_player_shots(
                 "YEAR": row["year"],
             })
         
-        return {"shots": shots, "total": len(shots)}
+        payload = {"shots": shots, "total": len(shots)}
+        cache_set(cache_key, payload, ttl_seconds=180)  # shorter TTL for larger payload
+        return payload
     except Exception as e:
         print(f"Error fetching shots: {e}")
         return {"shots": [], "total": 0}
@@ -190,6 +277,11 @@ def compare_players(req: PlayerCompareRequest):
     """Compare two players' statistics."""
     supabase = get_supabase()
     
+    cache_key = f"compare|{req.player1}|{req.player2}|{','.join(map(str, req.years)) if req.years else 'all'}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         # Get stats for both players
         result1 = supabase.rpc("get_player_stats", {
@@ -207,10 +299,12 @@ def compare_players(req: PlayerCompareRequest):
         if not result2.data:
             raise HTTPException(status_code=404, detail=f"Player '{req.player2}' not found")
         
-        return {
+        payload = {
             "player1": result1.data,
             "player2": result2.data,
         }
+        cache_set(cache_key, payload, ttl_seconds=300)
+        return payload
     except HTTPException:
         raise
     except Exception as e:
