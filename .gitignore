@@ -1,2 +1,28 @@
+# Data files (too large for git)
 data/*.csv
-data/nba_shots_clean.csv
+
+# Keep compressed clean data for deployment
+!data/nba_shots_clean.csv.gz
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/

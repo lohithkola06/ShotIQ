@@ -1,6 +1,8 @@
 import glob
+import gzip
 import os
 import re
+import shutil
 from typing import Iterable, List, Optional, Sequence
 
 import pandas as pd
@@ -10,6 +12,8 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 DEFAULT_YEARS: List[int] = [2020, 2021, 2022, 2023, 2024]
 YEAR_PATTERN = re.compile(r"NBA_(\d{4})_Shots\.csv$", re.IGNORECASE)
+CLEAN_CSV_PATH = os.path.join(DATA_DIR, "nba_shots_clean.csv")
+CLEAN_GZ_PATH = os.path.join(DATA_DIR, "nba_shots_clean.csv.gz")
 
 
 def year_to_path(year: int, data_dir: str = DATA_DIR) -> str:
@@ -221,11 +225,33 @@ def clean_shots(df: pd.DataFrame) -> pd.DataFrame:
     return df[ordered_cols].reset_index(drop=True)
 
 
-def save_clean(df: pd.DataFrame, path: str = os.path.join(DATA_DIR, "nba_shots_clean.csv")) -> None:
+def save_clean(df: pd.DataFrame, path: str = CLEAN_CSV_PATH) -> None:
     df.to_csv(path, index=False)
 
 
-def load_clean(path: str = os.path.join(DATA_DIR, "nba_shots_clean.csv")) -> pd.DataFrame:
+def _ensure_clean_csv_exists() -> None:
+    """
+    Ensure the clean CSV exists. If only the .gz version exists, decompress it.
+    This is used for deployment where we only ship the compressed file.
+    """
+    if os.path.exists(CLEAN_CSV_PATH):
+        return
+    
+    if os.path.exists(CLEAN_GZ_PATH):
+        print(f"Decompressing {CLEAN_GZ_PATH}...")
+        with gzip.open(CLEAN_GZ_PATH, 'rb') as f_in:
+            with open(CLEAN_CSV_PATH, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        print(f"Created {CLEAN_CSV_PATH}")
+    else:
+        raise FileNotFoundError(
+            f"Neither {CLEAN_CSV_PATH} nor {CLEAN_GZ_PATH} found. "
+            "Run 'python scripts/retrain_model.py' to generate the clean data."
+        )
+
+
+def load_clean(path: str = CLEAN_CSV_PATH) -> pd.DataFrame:
+    _ensure_clean_csv_exists()
     return pd.read_csv(path)
 
 
