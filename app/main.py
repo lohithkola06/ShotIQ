@@ -41,6 +41,7 @@ class ShotRequest(BaseModel):
     YEAR: int = 2024
     SHOT_TYPE: str = "3PT Field Goal"
     ACTION_TYPE: str = "Jump Shot"
+    player_name: Optional[str] = None
 
 
 class PlayerCompareRequest(BaseModel):
@@ -275,6 +276,7 @@ def predict_shot(req: ShotRequest):
         "YEAR": req.YEAR,
         "SHOT_TYPE": req.SHOT_TYPE,
         "ACTION_TYPE": req.ACTION_TYPE,
+        "player_name": req.player_name or "Unknown",
     }
     
     prob = predict_single(shot_dict)

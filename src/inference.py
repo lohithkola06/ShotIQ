@@ -28,7 +28,7 @@ def _prepare_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Required columns
     required_numeric = ["LOC_X", "LOC_Y", "YEAR"]
-    required_categorical = ["SHOT_TYPE", "ACTION_TYPE"]
+    required_categorical = ["SHOT_TYPE", "ACTION_TYPE", "player_name"]
 
     # Fill defaults if missing
     for col in required_numeric:
@@ -44,6 +44,8 @@ def _prepare_features(df: pd.DataFrame) -> pd.DataFrame:
                 df[col] = "2PT Field Goal"
             elif col == "ACTION_TYPE":
                 df[col] = "Jump Shot"
+            elif col == "player_name":
+                df[col] = "Unknown"
 
     # Shot distance
     if "SHOT_DISTANCE" not in df:
@@ -61,9 +63,10 @@ def _prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     df["YEAR"] = pd.to_numeric(df["YEAR"], errors="coerce").astype(int)
     df["SHOT_TYPE"] = df["SHOT_TYPE"].astype(str)
     df["ACTION_TYPE"] = df["ACTION_TYPE"].astype(str)
+    df["player_name"] = df["player_name"].astype(str)
 
     return df[
-        ["LOC_X", "LOC_Y", "SHOT_DISTANCE", "YEAR", "SHOT_TYPE", "ACTION_TYPE"]
+        ["LOC_X", "LOC_Y", "SHOT_DISTANCE", "YEAR", "SHOT_TYPE", "ACTION_TYPE", "player_name"]
     ]
 
 
@@ -127,4 +130,3 @@ def predict_grid(
     grid_df = pd.DataFrame(grid)
     probs = predict_proba(grid_df, model_path=model_path)
     return grid_df, probs
-

@@ -5,6 +5,7 @@ export type ShotRequest = {
   YEAR?: number;
   SHOT_TYPE?: string;
   ACTION_TYPE?: string;
+  player_name?: string;
 };
 
 export type GridRequest = {

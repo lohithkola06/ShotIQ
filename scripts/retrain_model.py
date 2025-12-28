@@ -44,6 +44,11 @@ def main():
     print("\n🧹 Cleaning data...")
     df_clean = clean_shots(df_raw)
     print(f"   Cleaned shape: {df_clean.shape}")
+
+    # Add player_name feature from canonical PLAYER_NAME column
+    if "PLAYER_NAME" not in df_clean.columns:
+        raise ValueError("PLAYER_NAME column missing after cleaning; cannot build player feature.")
+    df_clean["player_name"] = df_clean["PLAYER_NAME"].astype(str).str.strip()
     
     # Save cleaned data
     save_clean(df_clean)
@@ -51,7 +56,8 @@ def main():
     
     # Step 2: Prepare features
     print("\n🔧 Preparing features...")
-    X = df_clean[["LOC_X", "LOC_Y", "SHOT_DISTANCE", "YEAR", "SHOT_TYPE", "ACTION_TYPE"]]
+    # include player_name for player-specific probabilities
+    X = df_clean[["LOC_X", "LOC_Y", "SHOT_DISTANCE", "YEAR", "SHOT_TYPE", "ACTION_TYPE", "player_name"]]
     y = df_clean["SHOT_MADE_FLAG"]
     
     X_train, X_test, y_train, y_test = train_test_split(
@@ -120,4 +126,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -11,7 +11,7 @@ def build_feature_pipeline(df: pd.DataFrame):
     - categorical: one-hot encode
     """
     numeric_features = ["LOC_X", "LOC_Y", "SHOT_DISTANCE", "YEAR"]
-    categorical_features = ["SHOT_TYPE", "ACTION_TYPE"]
+    categorical_features = ["SHOT_TYPE", "ACTION_TYPE", "player_name"]
 
     preprocessor = ColumnTransformer(
         transformers=[
@@ -21,4 +21,3 @@ def build_feature_pipeline(df: pd.DataFrame):
     )
 
     return preprocessor, numeric_features + categorical_features
-

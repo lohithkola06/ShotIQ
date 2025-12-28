@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { predictShot } from "../api";
+import { predictShot, getPlayers } from "../api";
 
 // Close-range actions (only available within CLOSE_RANGE_DISTANCE)
 const CLOSE_RANGE_ACTIONS = [
@@ -39,9 +39,23 @@ const COURT = {
 export function PredictPanel() {
   const [position, setPosition] = useState({ x: 0, y: 15 });
   const [action, setAction] = useState<string>("Jump Shot");
+  const [selectedPlayer, setSelectedPlayer] = useState<string>("");
+  const [players, setPlayers] = useState<{ name: string }[]>([]);
   const [probability, setProbability] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [shotAnim, setShotAnim] = useState<{ id: number; result: "make" | "miss" } | null>(null);
+
+  // Load a small player list for selector
+  useEffect(() => {
+    (async () => {
+      try {
+        const { players } = await getPlayers("", 100);
+        setPlayers(players);
+      } catch (err) {
+        console.error("Failed to load players for predict selector", err);
+      }
+    })();
+  }, []);
 
   // Calculate distance and shot type
   const distance = Math.sqrt(position.x ** 2 + (position.y - COURT.rimY) ** 2);
@@ -100,6 +114,7 @@ export function PredictPanel() {
         YEAR: 2024,
         SHOT_TYPE: shotType,
         ACTION_TYPE: action,
+        player_name: selectedPlayer || undefined,
       });
       setProbability(result.probability_make);
       const made = Math.random() < result.probability_make;
@@ -335,6 +350,24 @@ export function PredictPanel() {
                 * Dunks, layups & tips require close range (&lt;{COURT.closeRangeDistance}ft)
               </p>
             )}
+          </div>
+
+          <div className="predict-control-group">
+            <label>Player (optional)</label>
+            <select
+              aria-label="Select player for personalized prediction"
+              title="Select player for personalized prediction"
+              className="predict-player-select"
+              value={selectedPlayer}
+              onChange={(e) => setSelectedPlayer(e.target.value)}
+            >
+              <option value="">Global model (all players)</option>
+              {players.slice(0, 100).map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <button 
