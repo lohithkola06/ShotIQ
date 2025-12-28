@@ -14,6 +14,7 @@ export function CompareView() {
   const [loading, setLoading] = useState(false);
   const [loadingYears, setLoadingYears] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
 
   // Common years between both players
   const commonYears = useMemo(() => {
@@ -138,7 +139,7 @@ export function CompareView() {
   return (
     <div className="fade-in">
       {/* Player selectors */}
-      <div className="compare-selectors">
+      <div className={`compare-selectors ${drawerCollapsed ? "compare-selectors--collapsed" : ""}`}>
         <div className="card compare-selector-card compare-selector-card--left">
           <div className="card__header">
             <h2 className="card__title compare-title--left">
@@ -167,6 +168,14 @@ export function CompareView() {
           />
         </div>
       </div>
+
+      {drawerCollapsed && (
+        <div className="compare-reopen">
+          <button className="btn btn--secondary" onClick={() => setDrawerCollapsed(false)}>
+            Change players / years
+          </button>
+        </div>
+      )}
 
       {/* Year filters - only show common years */}
       {player1 && player2 && commonYears.length > 0 && (

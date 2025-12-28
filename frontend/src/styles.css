@@ -1424,6 +1424,7 @@ body::before {
   align-items: start;
   gap: var(--space-4);
   margin-bottom: var(--space-6);
+  transition: transform var(--transition-base), opacity var(--transition-base), max-height var(--transition-base);
 }
 
 @media (max-width: 900px) {
@@ -1470,6 +1471,20 @@ body::before {
 .compare-selectors .player-item {
   min-height: 88px;
   padding: var(--space-5);
+}
+
+.compare-selectors--collapsed {
+  transform: translateY(-8px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  max-height: 0;
+  overflow: hidden;
+}
+
+.compare-reopen {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-5);
 }
 
 .compare-title--left {

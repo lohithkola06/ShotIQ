@@ -2,7 +2,6 @@
 NBA Shot Predictor API - Using Supabase for data storage.
 """
 import os
-import json
 from functools import lru_cache
 from time import monotonic, time
 from typing import Any, Dict, List, Optional, Tuple
@@ -11,10 +10,6 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
-try:
-    from redis import Redis
-except ImportError:
-    Redis = None  # type: ignore
 
 from src.inference import load_model, predict_single
 
@@ -92,45 +87,12 @@ _cache: Dict[str, Tuple[float, Any]] = {}
 _players_cache: Dict[str, Any] = {"data": None, "fetched_at": 0}
 
 
-@lru_cache(maxsize=1)
-def get_redis() -> Optional["Redis"]:
-    """Return Redis client if configured and library present."""
-    if not REDIS_URL or Redis is None:
-        return None
-    try:
-        # Parse simple redis:// URLs manually to avoid SSL/TLS mismatches
-        # Expected format: redis://username:password@host:port
-        if REDIS_URL.startswith("redis://"):
-            from urllib.parse import urlparse
-            parsed = urlparse(REDIS_URL)
-            client = Redis(
-                host=parsed.hostname,
-                port=parsed.port or 6379,
-                username=parsed.username,
-                password=parsed.password,
-                decode_responses=True,
-                ssl=False,
-            )
-        else:
-            client = Redis.from_url(REDIS_URL, decode_responses=True)
-        client.ping()  # quick validation
-        return client
-    except Exception as e:
-        print(f"Redis unavailable, falling back to in-process cache: {e}")
-        return None
+def get_redis() -> None:
+    """Redis disabled: always return None (use in-process cache)."""
+    return None
 
 
 def cache_get(key: str) -> Any:
-    redis_client = get_redis()
-    if redis_client:
-        try:
-            val = redis_client.get(key)
-            if val is not None:
-                import json
-                return json.loads(val)
-        except Exception as e:
-            print(f"Redis get failed for {key}: {e}")
-
     item = _cache.get(key)
     if not item:
         return None
@@ -142,36 +104,12 @@ def cache_get(key: str) -> Any:
 
 
 def cache_set(key: str, data: Any, ttl_seconds: int) -> None:
-    redis_client = get_redis()
-    if redis_client:
-        try:
-          import json
-          redis_client.setex(key, ttl_seconds, json.dumps(data))
-          return
-        except Exception as e:
-            print(f"Redis set failed for {key}: {e}")
-
     _cache[key] = (monotonic() + ttl_seconds, data)
 
 
 def _load_players_cache(min_shot_count: int = 10, limit: int = 6000) -> None:
     """Prefetch players once to serve fast, local filtering."""
     supabase = get_supabase()
-    redis_client = get_redis()
-    cache_key = "players_prefetch_v1"
-
-    # Try Redis first
-    if redis_client:
-        try:
-            val = redis_client.get(cache_key)
-            if val:
-                players = json.loads(val)
-                _players_cache["data"] = players
-                _players_cache["fetched_at"] = time()
-                return
-        except Exception as e:
-            print(f"Redis players prefetch read failed: {e}")
-
     try:
         result = supabase.rpc(
             "get_players_with_stats",
@@ -184,11 +122,6 @@ def _load_players_cache(min_shot_count: int = 10, limit: int = 6000) -> None:
         if result.data:
             _players_cache["data"] = result.data
             _players_cache["fetched_at"] = time()
-            if redis_client:
-                try:
-                    redis_client.setex(cache_key, 900, json.dumps(result.data))
-                except Exception as e:
-                    print(f"Redis players prefetch write failed: {e}")
     except Exception as e:
         print(f"Prefetch players cache failed: {e}")
 

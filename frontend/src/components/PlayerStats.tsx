@@ -37,10 +37,20 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
         const yearsParam = selectedYears.length > 0 ? selectedYears : undefined;
         const [playerData, shotsData] = await Promise.all([
           getPlayer(playerName, yearsParam),
-          getPlayerShots(playerName, yearsParam, 60000),
+          // keep network payload lighter; chart will sample when counts are huge
+          getPlayerShots(playerName, yearsParam, 30000),
         ]);
         setStats(playerData);
-        setShots(shotsData.shots);
+        const allShots = shotsData.shots;
+        // Downsample for rendering if very large to avoid UI lag, but keep all years represented
+        const maxDots = 9000;
+        if (allShots.length > maxDots) {
+          const stride = Math.ceil(allShots.length / maxDots);
+          const sampled = allShots.filter((_, idx) => idx % stride === 0).slice(0, maxDots);
+          setShots(sampled);
+        } else {
+          setShots(allShots);
+        }
         
         // Extract player's years from their season data (only on initial load)
         if (selectedYears.length === 0 && playerData.seasons) {
