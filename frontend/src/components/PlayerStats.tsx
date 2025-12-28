@@ -37,8 +37,8 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
         const yearsParam = selectedYears.length > 0 ? selectedYears : undefined;
         const [playerData, shotsData] = await Promise.all([
           getPlayer(playerName, yearsParam),
-          // keep network payload lighter; chart will sample when counts are huge
-          getPlayerShots(playerName, yearsParam, 30000),
+          // limit per-request payload to speed up filtered loads
+          getPlayerShots(playerName, yearsParam, selectedYears.length ? 10000 : 20000),
         ]);
         setStats(playerData);
         const allShots = shotsData.shots;
