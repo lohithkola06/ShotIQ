@@ -252,6 +252,7 @@ export function PredictPanel() {
                   min="-25"
                   max="25"
                   className="predict-coord-input"
+                  title="X position coordinate input field"
                 />
               </div>
               <input
@@ -262,6 +263,7 @@ export function PredictPanel() {
                 max="25"
                 step="0.5"
                 className="predict-slider"
+                title="X position range slider"
               />
               <div className="predict-slider-labels">
                 <span>Left (-25)</span>
@@ -285,6 +287,7 @@ export function PredictPanel() {
                   min="0"
                   max="42"
                   className="predict-coord-input"
+                  title="Y position coordinate input field"
                 />
               </div>
               <input
@@ -299,6 +302,7 @@ export function PredictPanel() {
                 max="42"
                 step="0.5"
                 className="predict-slider"
+                title="Y position range slider"
               />
               <div className="predict-slider-labels">
                 <span>Baseline</span>
