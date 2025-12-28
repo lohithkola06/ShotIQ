@@ -77,9 +77,9 @@ async def _startup_warm():
         _warm_model()
     except Exception as e:
         print(f"Model warmup failed: {e}")
-    # Opportunistic player roster prefetch (non-blocking if Redis is available)
+    # Opportunistic player roster prefetch (keep it light to avoid Supabase timeouts)
     try:
-        _load_players_cache(min_shot_count=10, limit=6000)
+        _load_players_cache(min_shot_count=50, limit=500)
     except Exception as e:
         print(f"Player prefetch at startup failed: {e}")
     threading.Thread(target=_warm_stats_cache, daemon=True).start()
@@ -112,7 +112,7 @@ def cache_set(key: str, data: Any, ttl_seconds: int) -> None:
     _cache[key] = (monotonic() + ttl_seconds, data)
 
 
-def _load_players_cache(min_shot_count: int = 10, limit: int = 6000) -> None:
+def _load_players_cache(min_shot_count: int = 50, limit: int = 500) -> None:
     """Prefetch players once to serve fast, local filtering."""
     supabase = get_supabase()
     try:
@@ -142,7 +142,7 @@ def _warm_stats_cache() -> None:
             {
                 "search_term": "",
                 "min_shot_count": 1,
-                "result_limit": 10000,
+                "result_limit": 2000,  # avoid long scans/timeouts
             },
         ).execute()
         players = [p["name"] for p in roster.data or [] if p.get("name")]

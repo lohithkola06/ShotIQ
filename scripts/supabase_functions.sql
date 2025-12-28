@@ -1,6 +1,21 @@
-\-- Run this in Supabase SQL Editor after creating the shots table
+-- Run this in Supabase SQL Editor after creating and indexing the shots table.
 
--- Function to get players with stats
+-- Optional: give longer time for heavy queries
+ALTER DATABASE postgres SET statement_timeout = '30s';
+
+-- Precompute player aggregates for faster /api/players
+CREATE MATERIALIZED VIEW IF NOT EXISTS player_shot_agg AS
+SELECT
+  player_name AS name,
+  COUNT(*)::BIGINT AS total_shots,
+  ROUND(AVG(shot_made_flag)::NUMERIC, 3) AS fg_pct
+FROM shots
+GROUP BY player_name;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_player_shot_agg_name ON player_shot_agg(name);
+CREATE INDEX IF NOT EXISTS idx_player_shot_agg_total ON player_shot_agg(total_shots DESC);
+
+-- Function to get players with stats (reads the materialized view)
 CREATE OR REPLACE FUNCTION get_players_with_stats(
   search_term TEXT DEFAULT '',
   min_shot_count INT DEFAULT 100,
@@ -11,24 +26,21 @@ RETURNS TABLE (
   total_shots BIGINT,
   fg_pct NUMERIC
 ) AS $$
+  SET LOCAL statement_timeout = '30s';
 BEGIN
   RETURN QUERY
   SELECT 
-    player_name as name,
-    COUNT(*)::BIGINT as total_shots,
-    ROUND(AVG(shot_made_flag)::NUMERIC, 3) as fg_pct
-  FROM shots
+    p.name,
+    p.total_shots,
+    p.fg_pct
+  FROM player_shot_agg p
   WHERE 
-    CASE 
-      WHEN search_term = '' THEN TRUE
-      ELSE player_name ILIKE '%' || search_term || '%'
-    END
-  GROUP BY player_name
-  HAVING COUNT(*) >= min_shot_count
-  ORDER BY COUNT(*) DESC
+    (search_term = '' OR p.name ILIKE '%' || search_term || '%')
+    AND p.total_shots >= min_shot_count
+  ORDER BY p.total_shots DESC
   LIMIT result_limit;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql STABLE;
 
 -- Function to get available years
 CREATE OR REPLACE FUNCTION get_available_years()
@@ -127,3 +139,5 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Refresh when new data is loaded
+REFRESH MATERIALIZED VIEW CONCURRENTLY player_shot_agg;

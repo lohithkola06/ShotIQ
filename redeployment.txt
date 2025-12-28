@@ -4,4 +4,6 @@ cd ShotIQ
 git pull
 source .venv/bin/activate
 pip install --no-cache-dir -r requirements-prod.txt
+sudo systemctl daemon-reload
 sudo systemctl restart shotiq
+sudo systemctl status shotiq
