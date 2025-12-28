@@ -296,6 +296,33 @@ export function PredictPanel() {
 
         {/* Controls & Result */}
         <div className="predict-controls-section">
+          {probability !== null && (
+            <div className="predict-result">
+              <div className="predict-result-header">Make Probability</div>
+              <div
+                className="predict-result-value"
+                style={{ color: getProbColor(probability) }}
+              >
+                {(probability * 100).toFixed(1)}%
+              </div>
+              <div className="predict-result-bar">
+                <div
+                  className="predict-result-fill"
+                  style={{
+                    width: `${probability * 100}%`,
+                    background: getProbColor(probability),
+                  }}
+                />
+              </div>
+              <div className="predict-result-context">
+                {probability < 0.35 && "Difficult shot — low percentage"}
+                {probability >= 0.35 && probability < 0.45 && "Below average — contested range"}
+                {probability >= 0.45 && probability < 0.55 && "Average — decent look"}
+                {probability >= 0.55 && "Good shot — high percentage"}
+              </div>
+            </div>
+          )}
+
           <div className="predict-control-group">
             <label>Shot Location</label>
             <div className="predict-coord-bubbles">
@@ -426,33 +453,6 @@ export function PredictPanel() {
               "Calculate Probability"
             )}
           </button>
-
-          {probability !== null && (
-            <div className="predict-result">
-              <div className="predict-result-header">Make Probability</div>
-              <div 
-                className="predict-result-value"
-                style={{ color: getProbColor(probability) }}
-              >
-                {(probability * 100).toFixed(1)}%
-              </div>
-              <div className="predict-result-bar">
-                <div 
-                  className="predict-result-fill"
-                  style={{ 
-                    width: `${probability * 100}%`,
-                    background: getProbColor(probability)
-                  }}
-                />
-              </div>
-              <div className="predict-result-context">
-                {probability < 0.35 && "Difficult shot — low percentage"}
-                {probability >= 0.35 && probability < 0.45 && "Below average — contested range"}
-                {probability >= 0.45 && probability < 0.55 && "Average — decent look"}
-                {probability >= 0.55 && "Good shot — high percentage"}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
