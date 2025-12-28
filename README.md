@@ -139,8 +139,8 @@ python scripts/retrain_model.py
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────┐
-│                 Cache (Redis, optional)                 │
-│   Speeds up players/years/stats for new visitors        │
+│           Cache (in-process; Redis removed)             │
+│   Lightweight caching inside FastAPI for now            │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -168,9 +168,6 @@ pip install -r requirements.txt
 
 # Start the API server
 uvicorn app.main:app --reload --port 8000
-
-# Optional: provide Redis for caching (recommended in prod)
-export REDIS_URL="rediss://default:<password>@<host>:<port>"
 ```
 
 ### Frontend Setup
@@ -191,7 +188,8 @@ Visit `http://localhost:5173` to see the app!
 ### Production notes
 - **Supabase**: set `SUPABASE_URL` and `SUPABASE_KEY` (service role) so the API can read the `shots` table and call the RPCs.
 - **Model file**: ensure `models/shot_model_xgb.pkl` is present in the deploy.
-- **Shots paging/binning**: for large careers, use the paged or binned shots endpoints to keep charts fast (see API section).
+- **Shots paging**: for large careers, the API already pages under the hood; front-end caps per-request sizes for speed.
+- **Oracle Cloud deploy**: Backend runs on an Oracle VM (FastAPI via systemd + nginx reverse proxy on port 80). Frontend (Vercel) rewrites `/api/*` to `http://<oracle-public-ip>/api/*` (see `frontend/vercel.json`). No Render backend is used anymore.
 
 ## 🔌 Supabase schema & functions
 
