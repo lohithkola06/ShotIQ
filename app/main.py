@@ -7,6 +7,7 @@ import threading
 from functools import lru_cache
 from time import monotonic, time
 from typing import Any, Dict, List, Optional, Tuple
+from math import sqrt
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -129,6 +130,85 @@ def _load_players_cache(min_shot_count: int = 50, limit: int = 500) -> None:
             _players_cache["fetched_at"] = time()
     except Exception as e:
         print(f"Prefetch players cache failed: {e}")
+
+
+def _compute_stats_from_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compute player stats from a list of shot rows (Python fallback)."""
+    if not rows:
+        return {}
+
+    total_shots = len(rows)
+    made_shots = sum(1 for r in rows if r.get("shot_made_flag"))
+    distances = []
+    shot_types: Dict[str, Dict[str, Any]] = {}
+    seasons: Dict[int, Dict[str, Any]] = {}
+    zones: Dict[str, Dict[str, Any]] = {}
+    actions: Dict[str, Dict[str, Any]] = {}
+
+    for r in rows:
+        dist = r.get("shot_distance")
+        if dist is None and r.get("loc_x") is not None and r.get("loc_y") is not None:
+            dist = sqrt(r["loc_x"] ** 2 + r["loc_y"] ** 2)
+        if dist is not None:
+            distances.append(dist)
+
+        stype = r.get("shot_type") or "Unknown"
+        shot_types.setdefault(stype, {"attempts": 0, "made": 0})
+        shot_types[stype]["attempts"] += 1
+        shot_types[stype]["made"] += 1 if r.get("shot_made_flag") else 0
+
+        year = r.get("year")
+        if year is not None:
+            seasons.setdefault(year, {"attempts": 0, "made": 0})
+            seasons[year]["attempts"] += 1
+            seasons[year]["made"] += 1 if r.get("shot_made_flag") else 0
+
+        action = r.get("action_type") or "Other"
+        actions.setdefault(action, {"attempts": 0, "made": 0})
+        actions[action]["attempts"] += 1
+        actions[action]["made"] += 1 if r.get("shot_made_flag") else 0
+
+        # distance-based zones
+        z_label = "3PT (22+ft)"
+        if dist is not None:
+            if dist <= 5:
+                z_label = "Paint (0-5ft)"
+            elif dist <= 10:
+                z_label = "Short (5-10ft)"
+            elif dist <= 15:
+                z_label = "Mid (10-15ft)"
+            elif dist <= 22:
+                z_label = "Long 2 (15-22ft)"
+        zones.setdefault(z_label, {"attempts": 0, "made": 0})
+        zones[z_label]["attempts"] += 1
+        zones[z_label]["made"] += 1 if r.get("shot_made_flag") else 0
+
+    def to_list(d: Dict[Any, Any], sort_key=None, limit=None):
+        items = []
+        for k, v in d.items():
+            attempts = v.get("attempts", 0)
+            made = v.get("made", 0)
+            fg = made / attempts if attempts else 0
+            items.append({**({"year": k} if isinstance(k, int) else {"label": k}), "attempts": attempts, "made": made, "fg_pct": round(fg, 3)})
+        if sort_key:
+            items.sort(key=sort_key, reverse=True)
+        if limit:
+            items = items[:limit]
+        return items
+
+    avg_distance = sum(distances) / len(distances) if distances else None
+
+    return {
+        "player_name": rows[0].get("player_name"),
+        "total_shots": total_shots,
+        "made_shots": made_shots,
+        "fg_pct": round(made_shots / total_shots, 3) if total_shots else 0,
+        "avg_distance": round(avg_distance, 1) if avg_distance is not None else None,
+        "shot_types": to_list(shot_types, sort_key=lambda x: x["attempts"]),
+        "seasons": to_list(seasons, sort_key=lambda x: x["year"]),
+        "zones": to_list(zones, sort_key=lambda x: x["attempts"]),
+        "actions": to_list(actions, sort_key=lambda x: x["attempts"], limit=10),
+    }
 
 
 def _warm_stats_cache() -> None:
@@ -349,8 +429,36 @@ def get_player(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error fetching player stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error fetching player stats via RPC, falling back: {e}")
+        # Fallback: page through shots and aggregate locally (capped)
+        try:
+            page_size = 2000
+            capped_limit = 60000
+            collected = []
+            offset = 0
+            while len(collected) < capped_limit:
+                q = supabase.table("shots").select(
+                    "player_name, loc_x, loc_y, shot_made_flag, shot_distance, shot_type, action_type, year"
+                ).eq("player_name", player_name)
+                if years_list:
+                    q = q.in_("year", years_list)
+                q = q.range(offset, offset + page_size - 1)
+                res = q.execute()
+                rows = res.data or []
+                collected.extend(rows)
+                if len(rows) < page_size:
+                    break
+                offset += page_size
+            stats = _compute_stats_from_rows(collected)
+            if not stats:
+                raise HTTPException(status_code=404, detail=f"Player '{player_name}' not found")
+            cache_set(cache_key, stats, ttl_seconds=300)
+            return stats
+        except HTTPException:
+            raise
+        except Exception as e2:
+            print(f"Fallback stats aggregation failed: {e2}")
+            raise HTTPException(status_code=500, detail="Unable to load player stats right now")
 
 
 @app.get("/api/player/{player_name}/shots")

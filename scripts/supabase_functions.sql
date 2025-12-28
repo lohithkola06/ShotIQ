@@ -62,6 +62,7 @@ RETURNS JSON AS $$
 DECLARE
   result JSON;
 BEGIN
+  SET LOCAL statement_timeout = '30s';
   WITH player_shots AS (
     SELECT *
     FROM shots
