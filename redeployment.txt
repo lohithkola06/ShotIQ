@@ -1,0 +1,7 @@
+ssh -i /Users/lohithkola/Downloads/ssh-key-2025-12-28.key ubuntu@144.24.135.111
+
+cd ShotIQ
+git pull
+source .venv/bin/activate
+pip install --no-cache-dir -r requirements-prod.txt
+sudo systemctl restart shotiq

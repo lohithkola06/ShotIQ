@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://shotiq-mo2p.onrender.com/api/:path*"
+      "destination": "http://144.24.135.111/api/:path*"
     },
     {
       "source": "/(.*)",
