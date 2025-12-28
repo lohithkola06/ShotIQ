@@ -18,16 +18,10 @@ export function CompareView() {
 
   // Common years between both players
   const commonYears = useMemo(() => {
-    const years1 =
-      stats1?.seasons?.map((s) => s.year) ??
-      player1Years;
-    const years2 =
-      stats2?.seasons?.map((s) => s.year) ??
-      player2Years;
-    if (!years1.length || !years2.length) return [];
-    const set1 = new Set(years1);
-    return years2.filter((year) => set1.has(year)).sort((a, b) => a - b);
-  }, [player1Years, player2Years, stats1?.seasons, stats2?.seasons]);
+    if (player1Years.length === 0 || player2Years.length === 0) return [];
+    const set1 = new Set(player1Years);
+    return player2Years.filter((year) => set1.has(year)).sort((a, b) => a - b);
+  }, [player1Years, player2Years]);
 
   // Load player 1's available years
   useEffect(() => {
@@ -84,6 +78,7 @@ export function CompareView() {
         const result = await comparePlayers(player1!.name, player2!.name, yearsParam);
         setStats1(result.player1);
         setStats2(result.player2);
+        setDrawerCollapsed(true);
       } catch (err) {
         console.error("Comparison failed:", err);
         setError("Unable to load comparison right now. Please try again.");
@@ -139,35 +134,37 @@ export function CompareView() {
   return (
     <div className="fade-in">
       {/* Player selectors */}
-      <div className={`compare-selectors ${drawerCollapsed ? "compare-selectors--collapsed" : ""}`}>
-        <div className="card compare-selector-card compare-selector-card--left">
-          <div className="card__header">
-            <h2 className="card__title compare-title--left">
-              {player1?.name || "Player 1"}
-            </h2>
+      {!drawerCollapsed && (
+        <div className="compare-selectors">
+          <div className="card compare-selector-card compare-selector-card--left">
+            <div className="card__header">
+              <h2 className="card__title compare-title--left">
+                {player1?.name || "Player 1"}
+              </h2>
+            </div>
+            <PlayerSearch
+              onSelect={setPlayer1}
+              selectedPlayer={player1}
+              placeholder="Search first player..."
+            />
           </div>
-          <PlayerSearch
-            onSelect={setPlayer1}
-            selectedPlayer={player1}
-            placeholder="Search first player..."
-          />
-        </div>
 
-        <div className="compare-vs-badge">VS</div>
+          <div className="compare-vs-badge">VS</div>
 
-        <div className="card compare-selector-card compare-selector-card--right">
-          <div className="card__header">
-            <h2 className="card__title compare-title--right">
-              {player2?.name || "Player 2"}
-            </h2>
+          <div className="card compare-selector-card compare-selector-card--right">
+            <div className="card__header">
+              <h2 className="card__title compare-title--right">
+                {player2?.name || "Player 2"}
+              </h2>
+            </div>
+            <PlayerSearch
+              onSelect={setPlayer2}
+              selectedPlayer={player2}
+              placeholder="Search second player..."
+            />
           </div>
-          <PlayerSearch
-            onSelect={setPlayer2}
-            selectedPlayer={player2}
-            placeholder="Search second player..."
-          />
         </div>
-      </div>
+      )}
 
       {drawerCollapsed && (
         <div className="compare-reopen">

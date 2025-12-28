@@ -1446,23 +1446,6 @@ body::before {
   justify-content: flex-end;
 }
 
-.compare-selector-card--right .search__input {
-  text-align: right;
-}
-
-.compare-selector-card--right .player-item {
-  flex-direction: row-reverse;
-  text-align: right;
-}
-
-.compare-selector-card--right .player-item:hover {
-  transform: translateX(-4px);
-}
-
-.compare-selector-card--right .player-item__stats {
-  flex-direction: row-reverse;
-}
-
 /* Make compare pickers roomier like main selector */
 .compare-selectors .player-list {
   max-height: 520px;
