@@ -97,15 +97,22 @@ def get_redis() -> Optional["Redis"]:
     """Return Redis client if configured and library present."""
     if not REDIS_URL or Redis is None:
         return None
-    url = REDIS_URL
-    # If the URL uses redis:// but the server expects TLS, allow upgrade to rediss://
-    if url.startswith("redis://") and "redislabs.com" in url:
-        url = url.replace("redis://", "rediss://", 1)
     try:
-        client = Redis.from_url(
-            url,
-            decode_responses=True,
-        )
+        # Parse simple redis:// URLs manually to avoid SSL/TLS mismatches
+        # Expected format: redis://username:password@host:port
+        if REDIS_URL.startswith("redis://"):
+            from urllib.parse import urlparse
+            parsed = urlparse(REDIS_URL)
+            client = Redis(
+                host=parsed.hostname,
+                port=parsed.port or 6379,
+                username=parsed.username,
+                password=parsed.password,
+                decode_responses=True,
+                ssl=False,
+            )
+        else:
+            client = Redis.from_url(REDIS_URL, decode_responses=True)
         client.ping()  # quick validation
         return client
     except Exception as e:
