@@ -2,6 +2,8 @@
 NBA Shot Predictor API - Using Supabase for data storage.
 """
 import os
+import json
+import threading
 from functools import lru_cache
 from time import monotonic, time
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,7 +18,7 @@ from src.inference import load_model, predict_single
 # Supabase configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://pabegzmewqavkqndmclg.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhYmVnem1ld3FhdmtxbmRtY2xnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4NjA3NTUsImV4cCI6MjA4MjQzNjc1NX0.uzlx6XpH5JkJIuO0uWfqeAD6woa1gI9fNlVrk0AyXU4")
-REDIS_URL = os.environ.get("REDIS_URL", "")
+CACHE_FILE = os.path.join("data", "player_stats_cache.json")
 
 app = FastAPI(title="NBA Shot Predictor API")
 
@@ -80,11 +82,14 @@ async def _startup_warm():
         _load_players_cache(min_shot_count=10, limit=6000)
     except Exception as e:
         print(f"Player prefetch at startup failed: {e}")
+    threading.Thread(target=_warm_stats_cache, daemon=True).start()
 
 # Simple in-process cache for expensive reads (fallback when Redis unavailable)
 # Structure: { key: (expires_at, data) }
 _cache: Dict[str, Tuple[float, Any]] = {}
 _players_cache: Dict[str, Any] = {"data": None, "fetched_at": 0}
+_stats_cache: Dict[str, Any] = {}
+_stats_cache_lock = threading.Lock()
 
 
 def get_redis() -> None:
@@ -124,6 +129,51 @@ def _load_players_cache(min_shot_count: int = 10, limit: int = 6000) -> None:
             _players_cache["fetched_at"] = time()
     except Exception as e:
         print(f"Prefetch players cache failed: {e}")
+
+
+def _warm_stats_cache() -> None:
+    """Fetch all player stats once and save to disk + memory for fast reads."""
+    os.makedirs("data", exist_ok=True)
+    supabase = get_supabase()
+    try:
+        # Get list of all players with minimal filter
+        roster = supabase.rpc(
+            "get_players_with_stats",
+            {
+                "search_term": "",
+                "min_shot_count": 1,
+                "result_limit": 10000,
+            },
+        ).execute()
+        players = [p["name"] for p in roster.data or [] if p.get("name")]
+    except Exception as e:
+        print(f"Stats cache warmup failed to load roster: {e}")
+        return
+
+    cache_out: Dict[str, Any] = {}
+    for name in players:
+        try:
+            result = supabase.rpc(
+                "get_player_stats",
+                {
+                    "p_player_name": name,
+                    "p_years": None,
+                },
+            ).execute()
+            if result.data:
+                cache_out[name] = result.data
+        except Exception as e:
+            print(f"Stats cache warmup failed for {name}: {e}")
+
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache_out, f)
+    except Exception as e:
+        print(f"Failed to write stats cache file: {e}")
+
+    with _stats_cache_lock:
+        _stats_cache.clear()
+        _stats_cache.update(cache_out)
 
 
 # Health check
@@ -266,6 +316,24 @@ def get_player(
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
+
+    # Use precomputed all-years cache if no year filter
+    if years_list is None:
+        with _stats_cache_lock:
+            cached_stats = _stats_cache.get(player_name)
+        if not cached_stats and os.path.exists(CACHE_FILE):
+            try:
+                with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                cached_stats = data.get(player_name)
+                if cached_stats:
+                    with _stats_cache_lock:
+                        _stats_cache.update(data)
+            except Exception as e:
+                print(f"Failed to read stats cache file: {e}")
+        if cached_stats:
+            cache_set(cache_key, cached_stats, ttl_seconds=600)
+            return cached_stats
     
     try:
         result = supabase.rpc("get_player_stats", {

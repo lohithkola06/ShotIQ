@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { Player } from "./api";
+import { useEffect, useState } from "react";
+import { Player, getPlayer, getPlayerShots, getPlayers, getYears } from "./api";
 import { PlayerSearch } from "./components/PlayerSearch";
 import { PlayerStats } from "./components/PlayerStats";
 import { PredictPanel } from "./components/PredictPanel";
 import { CompareView } from "./components/CompareView";
+import { AboutPage } from "./components/AboutPage";
 
-type Tab = "players" | "predict" | "compare";
+type Tab = "about" | "players" | "predict" | "compare";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: string }[] = [
   { id: "players", label: "Players", icon: "🏀" },
@@ -14,38 +15,118 @@ const NAV_ITEMS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>("players");
+  const [activeTab, setActiveTab] = useState<Tab>("about");
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [preloading, setPreloading] = useState(true);
+
+  // Warm up data caches on first load
+  useEffect(() => {
+    (async () => {
+      try {
+        const [{ players }, _years] = await Promise.all([
+          getPlayers("", 50),
+          getYears(),
+        ]);
+        // Prefetch first popular player stats/shots to make initial click instant
+        if (players && players.length > 0) {
+          const top = players[0];
+          await Promise.all([
+            getPlayer(top.name),
+            getPlayerShots(top.name, undefined, 15000),
+          ]);
+        }
+      } catch (err) {
+        console.error("Preload failed", err);
+      } finally {
+        // brief delay for UX polish
+        setTimeout(() => setPreloading(false), 400);
+      }
+    })();
+  }, []);
+
+  // Background prefetch for top players to keep cache warm
+  useEffect(() => {
+    let cancelled = false;
+    async function prefetchLoop() {
+      try {
+        const { players } = await getPlayers("", 100);
+        const top = players.slice(0, 8);
+        for (const p of top) {
+          if (cancelled) break;
+          await Promise.all([
+            getPlayer(p.name),
+            getPlayerShots(p.name, undefined, 20000),
+          ]);
+        }
+      } catch (err) {
+        console.error("Background prefetch failed", err);
+      } finally {
+        if (!cancelled) {
+          setTimeout(prefetchLoop, 10 * 60 * 1000); // refresh every 10 minutes
+        }
+      }
+    }
+    prefetchLoop();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="app-container">
+      {preloading && (
+        <div className="preload-overlay">
+          <div className="preload-glow" />
+          <div className="preload-card">
+            <div className="preload-logo">🏀</div>
+            <div className="preload-title">ShotIQ</div>
+            <div className="preload-subtitle">Warming up data & model...</div>
+            <div className="preload-progress">
+              <div className="preload-progress__bar" />
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="site-header">
-        <div className="site-header__brand">
-          <span className="site-header__logo">🏀</span>
-          <span className="site-header__title">ShotIQ</span>
-        </div>
-        
-        <nav className="site-header__nav">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              className={`site-header__nav-btn ${activeTab === item.id ? "active" : ""}`}
-              onClick={() => setActiveTab(item.id)}
-            >
-              <span className="site-header__nav-icon">{item.icon}</span>
-              <span className="site-header__nav-label">{item.label}</span>
-            </button>
-          ))}
-        </nav>
+        <div className="site-header__shell">
+          <div
+            className="site-header__brand site-header__brand--clickable"
+            onClick={() => setActiveTab("about")}
+            role="button"
+            aria-label="Go to About"
+          >
+            <div className="site-header__logo-badge">
+              <span className="site-header__logo">🏀</span>
+            </div>
+            <div className="site-header__title">ShotIQ</div>
+          </div>
 
-        <div className="site-header__meta">
-          <span className="site-header__seasons">2004–2024</span>
+          <nav className="site-header__nav">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                className={`site-header__nav-btn ${activeTab === item.id ? "active" : ""}`}
+                onClick={() => setActiveTab(item.id)}
+              >
+                <span className="site-header__nav-icon">{item.icon}</span>
+                <span className="site-header__nav-label">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="site-header__meta">
+            <div className="site-header__tagline">NBA Shot Analysis & Prediction</div>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="main-content">
+        {activeTab === "about" && (
+          <AboutPage onAnalyze={() => setActiveTab("players")} onPredict={() => setActiveTab("predict")} />
+        )}
+
         {activeTab === "players" && (
           <div className="grid grid--sidebar fade-in">
             <div className="card">
