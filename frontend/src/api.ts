@@ -135,7 +135,7 @@ export async function getPlayers(search: string = "", minShots: number = 500) {
   const params = new URLSearchParams({
     search,
     min_shots: minShots.toString(),
-    limit: "100",
+    limit: "50",
   });
   const key = `${search}|${minShots}`;
   return memoize(cache.players, key, async () => {

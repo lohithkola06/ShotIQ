@@ -23,23 +23,15 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [{ players }, _years] = await Promise.all([
-          getPlayers("", 50),
+        await Promise.all([
+          getPlayers("", 100), // small warmup to compile/lambda wake
           getYears(),
         ]);
-        // Prefetch first popular player stats/shots to make initial click instant
-        if (players && players.length > 0) {
-          const top = players[0];
-          await Promise.all([
-            getPlayer(top.name),
-            getPlayerShots(top.name, undefined, 15000),
-          ]);
-        }
       } catch (err) {
         console.error("Preload failed", err);
       } finally {
         // brief delay for UX polish
-        setTimeout(() => setPreloading(false), 400);
+        setTimeout(() => setPreloading(false), 250);
       }
     })();
   }, []);
@@ -49,13 +41,13 @@ export default function App() {
     let cancelled = false;
     async function prefetchLoop() {
       try {
-        const { players } = await getPlayers("", 100);
-        const top = players.slice(0, 8);
+        const { players } = await getPlayers("", 200);
+        const top = players.slice(0, 3);
         for (const p of top) {
           if (cancelled) break;
           await Promise.all([
             getPlayer(p.name),
-            getPlayerShots(p.name, undefined, 20000),
+            getPlayerShots(p.name, undefined, 4000),
           ]);
         }
       } catch (err) {
