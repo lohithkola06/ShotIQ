@@ -41,6 +41,7 @@ export function PredictPanel() {
   const [position, setPosition] = useState({ x: 0, y: 15 });
   const [action, setAction] = useState<string>("Jump Shot");
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [editingPlayer, setEditingPlayer] = useState(true);
   const [probability, setProbability] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [shotAnim, setShotAnim] = useState<{ id: number; result: "make" | "miss" } | null>(null);
@@ -134,80 +135,69 @@ export function PredictPanel() {
   
   return (
     <div className="predict-panel fade-in">
-      <div className="predict-hero">
-        <div className="predict-hero__content">
-          <div className="predict-hero__eyebrow">Live model • 2024 season tuned</div>
-          <h2>Predict the make odds from any spot</h2>
-          <p>
-            Drop the marker on the court, pick the move, and optionally bias the model toward a specific player.
-            Designed for quick what-if scenarios and heat check debates.
-          </p>
-          <div className="predict-hero__pills">
-            <span className="predict-pill">Distance: {distance.toFixed(1)} ft</span>
-            <span className="predict-pill">{isThreePointer ? "Perimeter arc aware" : "Paint & midrange aware"}</span>
-            <span className="predict-pill">{availableActions.length} action options</span>
-          </div>
-        </div>
-        <div className="predict-hero__glass">
-          <div className="predict-hero__stat">
-            <span>Current profile</span>
-            <div className="predict-hero__stat-value">
-              {selectedPlayer ? selectedPlayer.name : "Global model"}
+      {editingPlayer || !selectedPlayer ? (
+        <div className="predict-player-panel">
+          <div className="predict-player-header">
+            <div>
+              <div className="predict-player-kicker">Player personalization</div>
+              <h3>Search & lock a player</h3>
+              <p className="predict-player-subtitle">
+                Find anyone in the database to nudge probabilities toward their shot profile. Leave blank for neutral.
+              </p>
             </div>
-            <p className="predict-hero__stat-note">
-              {selectedPlayer
-                ? "Personalized to this player's historical tendencies."
-                : "Blends league-wide shot data for a neutral baseline."}
-            </p>
-          </div>
-          <div className="predict-hero__stat">
-            <span>Shot label</span>
-            <div className={`predict-shot-chip ${isThreePointer ? "three" : "two"}`}>
-              {isThreePointer ? "3PT field goal" : "2PT field goal"}
+            <div className="predict-player-chip">
+              <span className="predict-player-chip__label">Active</span>
+              <span className="predict-player-chip__name">
+                {selectedPlayer ? selectedPlayer.name : "Global model"}
+              </span>
             </div>
-            <p className="predict-hero__stat-note">Auto-detected from location.</p>
           </div>
-        </div>
-      </div>
 
-      <div className="predict-player-panel">
-        <div className="predict-player-header">
-          <div>
-            <div className="predict-player-kicker">Player personalization</div>
-            <h3>Search & lock a player</h3>
+          <div className="predict-player-search">
+            <PlayerSearch
+              onSelect={(player) => {
+                setSelectedPlayer(player);
+                setEditingPlayer(false);
+              }}
+              selectedPlayer={selectedPlayer ?? undefined}
+              placeholder="Type a name: e.g. Stephen Curry, Nikola Jokic, LeBron James"
+            />
+          </div>
+
+          <div className="predict-player-hint">
+            Selecting a player reweights the model with their historical shot profile; clearing falls back to the global model.
+          </div>
+        </div>
+      ) : (
+        <div className="predict-player-collapsed">
+          <div className="predict-player-summary">
+            <p className="predict-player-kicker">Player personalization</p>
+            <h4>{selectedPlayer?.name}</h4>
             <p className="predict-player-subtitle">
-              Find anyone in the database to nudge probabilities toward their shot profile. Leave blank for neutral.
+              Using this player's historical tendencies. Keep or switch as needed.
             </p>
           </div>
-          <div className="predict-player-chip">
-            <span className="predict-player-chip__label">Active</span>
-            <span className="predict-player-chip__name">
-              {selectedPlayer ? selectedPlayer.name : "Global model"}
-            </span>
-            {selectedPlayer && (
-              <button
-                className="predict-player-chip__clear"
-                onClick={() => setSelectedPlayer(null)}
-                type="button"
-              >
-                Reset
-              </button>
-            )}
+          <div className="predict-player-actions">
+            <button
+              type="button"
+              className="predict-ghost-btn"
+              onClick={() => setEditingPlayer(true)}
+            >
+              Change player
+            </button>
+            <button
+              type="button"
+              className="predict-outline-btn"
+              onClick={() => {
+                setSelectedPlayer(null);
+                setEditingPlayer(true);
+              }}
+            >
+              Reset to global
+            </button>
           </div>
         </div>
-
-        <div className="predict-player-search">
-          <PlayerSearch
-            onSelect={(player) => setSelectedPlayer(player)}
-            selectedPlayer={selectedPlayer ?? undefined}
-            placeholder="Type a name: e.g. Stephen Curry, Nikola Jokic, LeBron James"
-          />
-        </div>
-
-        <div className="predict-player-hint">
-          Selecting a player reweights the model with their historical shot profile; clearing falls back to the global model.
-        </div>
-      </div>
+      )}
 
       <div className="predict-layout">
         {/* Interactive Court */}
@@ -302,94 +292,82 @@ export function PredictPanel() {
             </svg>
           </div>
 
-          {/* Coordinate Controls */}
-          <div className="predict-coord-controls">
-            <div className="predict-coord-group">
-              <div className="predict-coord-header">
-                <label>X Position</label>
+        </div>
+
+        {/* Controls & Result */}
+        <div className="predict-controls-section">
+          <div className="predict-control-group">
+            <label>Shot Location</label>
+            <div className="predict-coord-bubbles">
+              <div className="predict-coord-bubble">
+                <div className="predict-coord-header">
+                  <label>X Position</label>
+                  <input
+                    type="number"
+                    value={position.x.toFixed(1)}
+                    onChange={(e) => setPosition({ ...position, x: parseFloat(e.target.value) || 0 })}
+                    step="0.5"
+                    min="-25"
+                    max="25"
+                    className="predict-coord-input"
+                    title="X position coordinate input field"
+                  />
+                </div>
                 <input
-                  type="number"
-                  value={position.x.toFixed(1)}
-                  onChange={(e) => setPosition({ ...position, x: parseFloat(e.target.value) || 0 })}
-                  step="0.5"
+                  type="range"
+                  value={position.x}
+                  onChange={(e) => setPosition({ ...position, x: parseFloat(e.target.value) })}
                   min="-25"
                   max="25"
-                  className="predict-coord-input"
-                  title="X position coordinate input field"
+                  step="0.5"
+                  className="predict-slider"
+                  title="X position range slider"
                 />
+                <div className="predict-slider-labels">
+                  <span>Left (-25)</span>
+                  <span>Center</span>
+                  <span>Right (25)</span>
+                </div>
               </div>
-              <input
-                type="range"
-                value={position.x}
-                onChange={(e) => setPosition({ ...position, x: parseFloat(e.target.value) })}
-                min="-25"
-                max="25"
-                step="0.5"
-                className="predict-slider"
-                title="X position range slider"
-              />
-              <div className="predict-slider-labels">
-                <span>Left (-25)</span>
-                <span>Center</span>
-                <span>Right (25)</span>
-              </div>
-            </div>
 
-            <div className="predict-coord-group">
-              <div className="predict-coord-header">
-                <label>Y Position</label>
+              <div className="predict-coord-bubble">
+                <div className="predict-coord-header">
+                  <label>Y Position</label>
+                  <input
+                    type="number"
+                    value={position.y.toFixed(1)}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      const yVal = Number.isFinite(val) ? Math.max(0, Math.min(42, val)) : 0;
+                      setPosition({ ...position, y: yVal });
+                    }}
+                    step="0.5"
+                    min="0"
+                    max="42"
+                    className="predict-coord-input"
+                    title="Y position coordinate input field"
+                  />
+                </div>
                 <input
-                  type="number"
-                  value={position.y.toFixed(1)}
+                  type="range"
+                  value={position.y}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value);
                     const yVal = Number.isFinite(val) ? Math.max(0, Math.min(42, val)) : 0;
                     setPosition({ ...position, y: yVal });
                   }}
-                  step="0.5"
                   min="0"
                   max="42"
-                  className="predict-coord-input"
-                  title="Y position coordinate input field"
+                  step="0.5"
+                  className="predict-slider"
+                  title="Y position range slider"
                 />
+                <div className="predict-slider-labels">
+                  <span>Baseline</span>
+                  <span>Rim (1)</span>
+                  <span>Half Court</span>
+                </div>
               </div>
-              <input
-                type="range"
-                value={position.y}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  const yVal = Number.isFinite(val) ? Math.max(0, Math.min(42, val)) : 0;
-                  setPosition({ ...position, y: yVal });
-                }}
-                min="0"
-                max="42"
-                step="0.5"
-                className="predict-slider"
-                title="Y position range slider"
-              />
-              <div className="predict-slider-labels">
-                <span>Baseline</span>
-                <span>Rim (1)</span>
-                <span>Half Court</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Controls & Result */}
-        <div className="predict-controls-section">
-          <div className="predict-profile-callout">
-            <div>
-              <p className="predict-profile-label">Profile</p>
-              <h4>{selectedPlayer ? selectedPlayer.name : "Global model"}</h4>
-              <p className="predict-profile-note">
-                {selectedPlayer
-                  ? "Using this player's historical tendencies for personalization."
-                  : "Neutral shot profile across all tracked players."}
-              </p>
-            </div>
-            <div className="predict-profile-chip">
-              {isThreePointer ? "Perimeter focus" : isCloseRange ? "Paint pressure" : "Midrange touch"}
             </div>
           </div>
 
