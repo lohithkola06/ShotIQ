@@ -73,6 +73,19 @@ def get_supabase() -> Client:
 def _warm_model():
     return load_model()
 
+# Warm critical resources on startup so first request is fast
+@app.on_event("startup")
+async def _startup_warm():
+    try:
+        _warm_model()
+    except Exception as e:
+        print(f"Model warmup failed: {e}")
+    # Opportunistic player roster prefetch (non-blocking if Redis is available)
+    try:
+        _load_players_cache(min_shot_count=10, limit=6000)
+    except Exception as e:
+        print(f"Player prefetch at startup failed: {e}")
+
 # Simple in-process cache for expensive reads (fallback when Redis unavailable)
 # Structure: { key: (expires_at, data) }
 _cache: Dict[str, Tuple[float, Any]] = {}
