@@ -193,6 +193,7 @@ Visit `http://localhost:5173` to see the app!
 - **Supabase**: set `SUPABASE_URL` and `SUPABASE_KEY` (service role) so the API can read the `shots` table and call the RPCs.
 - **Redis caching**: set `REDIS_URL` (e.g., Upstash/Redis Cloud) to cache players/years/stats responses for faster first-loads. If unset, the API falls back to an in-process cache.
 - **Model file**: ensure `models/shot_model_xgb.pkl` is present in the deploy.
+- **Shots paging/binning**: for large careers, use the paged or binned shots endpoints to keep charts fast (see API section).
 
 ## 🔌 Supabase schema & functions
 
@@ -214,6 +215,8 @@ Visit `http://localhost:5173` to see the app!
 | `/api/players` | GET | Search and list players |
 | `/api/player/{name}` | GET | Get player statistics |
 | `/api/player/{name}/shots` | GET | Get player's shot data |
+| `/api/player/shots/page` | POST | Paged shots (`player_name`, optional `years`, `page`, `page_size`) |
+| `/api/player/shots/bins` | POST | Binned shots for heatmaps (`player_name`, optional `years`, `x_bins`, `y_bins`) |
 | `/api/years` | GET | Get available seasons |
 | `/api/compare` | POST | Compare two players |
 | **Data** |  | Stored in Supabase (`shots` table + RPCs `get_players_with_stats`, `get_player_stats`, `get_available_years`) |

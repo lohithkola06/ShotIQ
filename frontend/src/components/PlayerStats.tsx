@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import {
   getPlayer,
   getPlayerShots,
+  getPlayerShotsBinned,
   PlayerStats as PlayerStatsType,
   Shot,
+  ShotBinsResponse,
 } from "../api";
 import { BarChart } from "./BarChart";
 import { ShotChart } from "./ShotChart";
@@ -17,6 +19,8 @@ type ViewTab = "shots" | "zones" | "seasons";
 export function PlayerStats({ playerName }: PlayerStatsProps) {
   const [stats, setStats] = useState<PlayerStatsType | null>(null);
   const [shots, setShots] = useState<Shot[]>([]);
+  const [displayShots, setDisplayShots] = useState<Shot[]>([]);
+  const [shotBins, setShotBins] = useState<ShotBinsResponse | null>(null);
   const [playerYears, setPlayerYears] = useState<number[]>([]);
   const [selectedYears, setSelectedYears] = useState<number[]>([]);
   const [activeTab, setActiveTab] = useState<ViewTab>("shots");
@@ -35,12 +39,23 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
       setHasError(false);
       try {
         const yearsParam = selectedYears.length > 0 ? selectedYears : undefined;
-        const [playerData, shotsData] = await Promise.all([
+        const [playerData, shotsData, binsData] = await Promise.all([
           getPlayer(playerName, yearsParam),
           getPlayerShots(playerName, yearsParam, 50000),
+          getPlayerShotsBinned(playerName, yearsParam, 30, 24),
         ]);
         setStats(playerData);
         setShots(shotsData.shots);
+        setShotBins(binsData);
+        // Downsample shots for chart rendering to keep UI fast (allow up to ~26k dots)
+        const maxDots = 26000;
+        if (shotsData.shots.length > maxDots) {
+          const stride = Math.ceil(shotsData.shots.length / maxDots);
+          const sampled = shotsData.shots.filter((_, idx) => idx % stride === 0).slice(0, maxDots);
+          setDisplayShots(sampled);
+        } else {
+          setDisplayShots(shotsData.shots);
+        }
         
         // Extract player's years from their season data (only on initial load)
         if (selectedYears.length === 0 && playerData.seasons) {
@@ -144,7 +159,10 @@ export function PlayerStats({ playerName }: PlayerStatsProps) {
       {activeTab === "shots" && (
         <div className="grid grid--2 fade-in">
           <div>
-            <ShotChart shots={shots} />
+            <ShotChart
+              shots={displayShots.length ? displayShots : shots}
+              bins={shotBins}
+            />
           </div>
           <div>
             <BarChart

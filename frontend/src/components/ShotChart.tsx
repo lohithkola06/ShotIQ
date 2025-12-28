@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
-import { Shot } from "../api";
+import { Shot, ShotBinsResponse } from "../api";
 
 interface ShotChartProps {
-  shots: Shot[];
+  shots?: Shot[];
+  bins?: ShotBinsResponse | null;
 }
 
 // NBA Court dimensions in feet (official measurements)
@@ -20,12 +21,12 @@ const COURT = {
   threePointSideDistance: 22,
 };
 
-export function ShotChart({ shots }: ShotChartProps) {
-  const [tooltip, setTooltip] = useState<{
-    shot: Shot;
-    x: number;
-    y: number;
-  } | null>(null);
+type TooltipState =
+  | { kind: "shot"; shot: Shot; x: number; y: number }
+  | { kind: "bin"; bin: { attempts: number; made: number; fg_pct: number }; x: number; y: number };
+
+export function ShotChart({ shots = [], bins }: ShotChartProps) {
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const handleMouseEnter = useCallback(
@@ -33,6 +34,7 @@ export function ShotChart({ shots }: ShotChartProps) {
       const svgRect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
       if (svgRect) {
         setTooltip({
+          kind: "shot",
           shot,
           x: event.clientX - svgRect.left + 12,
           y: event.clientY - svgRect.top + 12,
@@ -47,6 +49,24 @@ export function ShotChart({ shots }: ShotChartProps) {
     setTooltip(null);
     setHoveredIdx(null);
   }, []);
+
+  const handleBinEnter = useCallback(
+    (
+      bin: { attempts: number; made: number; fg_pct: number },
+      event: React.MouseEvent<SVGRectElement, MouseEvent>
+    ) => {
+      const svgRect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+      if (svgRect) {
+        setTooltip({
+          kind: "bin",
+          bin,
+          x: event.clientX - svgRect.left + 12,
+          y: event.clientY - svgRect.top + 12,
+        });
+      }
+    },
+    []
+  );
 
   // Scale: 1 foot = 10 SVG units
   const S = 10;
@@ -219,28 +239,64 @@ export function ShotChart({ shots }: ShotChartProps) {
           strokeWidth={3}
         />
 
-        {/* === SHOT DOTS === */}
-        {shots.map((shot, idx) => {
-          const isMade = shot.SHOT_MADE_FLAG === 1;
-          return (
-            <circle
-              key={idx}
-              className={`shot-dot ${isMade ? "shot-dot--made" : "shot-dot--missed"} ${
-                hoveredIdx === idx ? "shot-dot--active" : ""
-              }`}
-              cx={shot.LOC_X * S}
-              cy={shot.LOC_Y * S}
-              r={4.4}
-              onMouseEnter={(e) => handleMouseEnter(shot, e, idx)}
-              onMouseLeave={handleMouseLeave}
-              filter="url(#shotShadow)"
-            />
-          );
-        })}
+        {/* === SHOTS (BINS or DOTS) === */}
+        {bins && bins.bins.length > 0 ? (
+          (() => {
+            const xStep = (bins.x_range[1] - bins.x_range[0]) / bins.x_bins;
+            const yStep = (bins.y_range[1] - bins.y_range[0]) / bins.y_bins;
+            const maxAttempts = Math.max(...bins.bins.map((b) => b.attempts));
+            const fgToColor = (fg: number) => {
+              const clamped = Math.max(0, Math.min(1, fg));
+              const r = Math.round(255 * (1 - clamped));
+              const g = Math.round(255 * clamped);
+              return `rgba(${r},${g},120,0.8)`;
+            };
+            return bins.bins.map((b, idx) => {
+              const x = (bins.x_range[0] + b.x_bin * xStep) * S;
+              const y = (bins.y_range[0] + b.y_bin * yStep) * S;
+              const width = xStep * S;
+              const height = yStep * S;
+              const scale = 0.4 + 0.6 * (b.attempts / maxAttempts || 0);
+              return (
+                <rect
+                  key={idx}
+                  x={x}
+                  y={y}
+                  width={width}
+                  height={height}
+                  fill={fgToColor(b.fg_pct)}
+                  fillOpacity={0.85 * scale}
+                  stroke="rgba(255,255,255,0.04)"
+                  strokeWidth={1}
+                  onMouseEnter={(e) => handleBinEnter(b, e)}
+                  onMouseLeave={handleMouseLeave}
+                />
+              );
+            });
+          })()
+        ) : (
+          shots.map((shot, idx) => {
+            const isMade = shot.SHOT_MADE_FLAG === 1;
+            return (
+              <circle
+                key={idx}
+                className={`shot-dot ${isMade ? "shot-dot--made" : "shot-dot--missed"} ${
+                  hoveredIdx === idx ? "shot-dot--active" : ""
+                }`}
+                cx={shot.LOC_X * S}
+                cy={shot.LOC_Y * S}
+                r={4.4}
+                onMouseEnter={(e) => handleMouseEnter(shot, e, idx)}
+                onMouseLeave={handleMouseLeave}
+                filter="url(#shotShadow)"
+              />
+            );
+          })
+        )}
       </svg>
 
       {/* Tooltip */}
-      {tooltip && (
+      {tooltip && tooltip.kind === "shot" && (
         <div className="tooltip tooltip--inset" style={{ left: tooltip.x, top: tooltip.y }}>
           <div className="tooltip__title">
             {tooltip.shot.SHOT_MADE_FLAG === 1 ? "✓ Made" : "✗ Missed"}
@@ -260,20 +316,49 @@ export function ShotChart({ shots }: ShotChartProps) {
         </div>
       )}
 
+      {tooltip && tooltip.kind === "bin" && (
+        <div className="tooltip tooltip--inset" style={{ left: tooltip.x, top: tooltip.y }}>
+          <div className="tooltip__title">Zone Summary</div>
+          <div className="tooltip__row">
+            <span>Attempts</span>
+            <span>{tooltip.bin.attempts}</span>
+          </div>
+          <div className="tooltip__row">
+            <span>FG%</span>
+            <span>{(tooltip.bin.fg_pct * 100).toFixed(1)}%</span>
+          </div>
+        </div>
+      )}
+
       {/* Legend */}
       <div className="legend">
-        <div className="legend-item">
-          <div className="legend-dot legend-dot--made" />
-          <span>Made</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-dot legend-dot--missed" />
-          <span>Missed</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-dot legend-dot--active" />
-          <span>Hover</span>
-        </div>
+        {bins && bins.bins.length > 0 ? (
+          <>
+            <div className="legend-item">
+              <div className="legend-dot legend-dot--missed" />
+              <span>Lower FG%</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-dot legend-dot--made" />
+              <span>Higher FG%</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="legend-item">
+              <div className="legend-dot legend-dot--made" />
+              <span>Made</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-dot legend-dot--missed" />
+              <span>Missed</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-dot legend-dot--active" />
+              <span>Hover</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

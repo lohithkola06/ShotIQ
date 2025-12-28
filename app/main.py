@@ -3,7 +3,7 @@ NBA Shot Predictor API - Using Supabase for data storage.
 """
 import os
 from functools import lru_cache
-from time import monotonic
+from time import monotonic, time
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, Query, HTTPException
@@ -49,6 +49,17 @@ class PlayerCompareRequest(BaseModel):
     player2: str
     years: Optional[List[int]] = None
 
+class ShotsPageRequest(BaseModel):
+    player_name: str
+    years: Optional[List[int]] = None
+    page: int = 1
+    page_size: int = 2000
+
+class ShotsBinsRequest(BaseModel):
+    player_name: str
+    years: Optional[List[int]] = None
+    x_bins: int = 25
+    y_bins: int = 20
 
 # Cached clients
 @lru_cache(maxsize=1)
@@ -64,6 +75,7 @@ def _warm_model():
 # Simple in-process cache for expensive reads (fallback when Redis unavailable)
 # Structure: { key: (expires_at, data) }
 _cache: Dict[str, Tuple[float, Any]] = {}
+_players_cache: Dict[str, Any] = {"data": None, "fetched_at": 0}
 
 
 @lru_cache(maxsize=1)
@@ -115,6 +127,25 @@ def cache_set(key: str, data: Any, ttl_seconds: int) -> None:
     _cache[key] = (monotonic() + ttl_seconds, data)
 
 
+def _load_players_cache(min_shot_count: int = 10, limit: int = 6000) -> None:
+    """Prefetch players once to serve fast, local filtering."""
+    supabase = get_supabase()
+    try:
+        result = supabase.rpc(
+            "get_players_with_stats",
+            {
+                "search_term": "",
+                "min_shot_count": min_shot_count,
+                "result_limit": limit,
+            },
+        ).execute()
+        if result.data:
+            _players_cache["data"] = result.data
+            _players_cache["fetched_at"] = time()
+    except Exception as e:
+        print(f"Prefetch players cache failed: {e}")
+
+
 # Health check
 @app.get("/")
 def health():
@@ -155,6 +186,20 @@ def get_players(
     if cached is not None:
         return {"players": cached}
 
+    # Try in-memory cached roster first to avoid timeouts on frequent searches
+    now = time()
+    if not _players_cache["data"] or now - _players_cache["fetched_at"] > 600:
+        _load_players_cache(min_shot_count=10, limit=6000)
+    if _players_cache["data"]:
+        filtered = [
+            p for p in _players_cache["data"]
+            if p.get("total_shots", 0) >= min_shots
+            and (search.strip() == "" or search.lower() in p.get("name", "").lower())
+        ]
+        filtered = sorted(filtered, key=lambda p: p.get("total_shots", 0), reverse=True)[:limit]
+        cache_set(cache_key, filtered, ttl_seconds=120)
+        return {"players": filtered}
+    
     try:
         result = supabase.rpc(
             "get_players_with_stats",
@@ -169,7 +214,42 @@ def get_players(
         return {"players": players}
     except Exception as e:
         print(f"Error fetching players: {e}")
-        return {"players": []}
+        # Fallback: lightweight client-side aggregation on a capped sample
+        try:
+            sample_limit = 5000
+            query = (
+                supabase.table("shots")
+                .select("player_name, shot_made_flag")
+                .limit(sample_limit)
+            )
+            if search:
+                query = query.ilike("player_name", f"%{search}%")
+            sample = query.execute()
+            rows = sample.data or []
+            # Aggregate locally
+            counts: dict[str, dict[str, float]] = {}
+            for row in rows:
+                name = row["player_name"]
+                if name not in counts:
+                    counts[name] = {"attempts": 0, "made": 0}
+                counts[name]["attempts"] += 1
+                counts[name]["made"] += float(row["shot_made_flag"] or 0)
+            players = []
+            for name, agg in counts.items():
+                if agg["attempts"] >= min_shots:
+                    fg = agg["made"] / agg["attempts"] if agg["attempts"] else 0
+                    players.append(
+                        {
+                            "name": name,
+                            "total_shots": int(agg["attempts"]),
+                            "fg_pct": round(fg, 3),
+                        }
+                    )
+            players = sorted(players, key=lambda p: p["total_shots"], reverse=True)[:limit]
+            return {"players": players}
+        except Exception as e2:
+            print(f"Fallback player fetch failed: {e2}")
+            return {"players": []}
 
 
 @app.get("/api/years")
@@ -240,38 +320,135 @@ def get_player_shots(
         return cached
 
     try:
-        query = supabase.table("shots").select(
-            "loc_x, loc_y, shot_made_flag, shot_distance, shot_type, action_type, year"
-        ).eq("player_name", player_name)
-        
-        if years:
-            years_list = [int(y) for y in years.split(",")]
-            query = query.in_("year", years_list)
-        
-        # Supabase REST limit defaults can be low; use range to request full span
+        page_size = 1000
         capped_limit = min(limit, 50000)
-        query = query.range(0, capped_limit - 1)
-        result = query.execute()
+        collected = []
+        offset = 0
+
+        years_list = [int(y) for y in years.split(",")] if years else None
+
+        while len(collected) < capped_limit:
+            q = supabase.table("shots").select(
+                "loc_x, loc_y, shot_made_flag, shot_distance, shot_type, action_type, year"
+            ).eq("player_name", player_name)
+
+            if years_list:
+                q = q.in_("year", years_list)
+
+            q = q.order("year", desc=False).order("id", desc=False) if "id" in ["id"] else q.order("year", desc=False)
+            q = q.range(offset, offset + page_size - 1)
+            result = q.execute()
+
+            rows = result.data or []
+            for row in rows:
+                collected.append({
+                    "LOC_X": row["loc_x"],
+                    "LOC_Y": row["loc_y"],
+                    "SHOT_MADE_FLAG": row["shot_made_flag"],
+                    "SHOT_DISTANCE": row["shot_distance"],
+                    "SHOT_TYPE": row["shot_type"],
+                    "ACTION_TYPE": row["action_type"],
+                    "YEAR": row["year"],
+                })
+                if len(collected) >= capped_limit:
+                    break
+
+            if len(rows) < page_size:
+                break
+            offset += page_size
         
-        # Convert to uppercase keys for frontend compatibility
-        shots = []
-        for row in result.data or []:
-            shots.append({
-                "LOC_X": row["loc_x"],
-                "LOC_Y": row["loc_y"],
-                "SHOT_MADE_FLAG": row["shot_made_flag"],
-                "SHOT_DISTANCE": row["shot_distance"],
-                "SHOT_TYPE": row["shot_type"],
-                "ACTION_TYPE": row["action_type"],
-                "YEAR": row["year"],
-            })
-        
-        payload = {"shots": shots, "total": len(shots)}
-        cache_set(cache_key, payload, ttl_seconds=180)  # shorter TTL for larger payload
+        payload = {"shots": collected, "total": len(collected)}
+        cache_set(cache_key, payload, ttl_seconds=600)  # keep longer to reduce repeat hits
         return payload
     except Exception as e:
         print(f"Error fetching shots: {e}")
         return {"shots": [], "total": 0}
+
+
+@app.post("/api/player/shots/page")
+def get_player_shots_page(req: ShotsPageRequest):
+    """Paged shots for a player to reduce payload size."""
+    supabase = get_supabase()
+    page = max(1, req.page)
+    page_size = max(100, min(req.page_size, 5000))
+    offset = (page - 1) * page_size
+    
+    years_list = req.years
+    try:
+        q = supabase.table("shots").select(
+            "loc_x, loc_y, shot_made_flag, shot_distance, shot_type, action_type, year"
+        ).eq("player_name", req.player_name)
+        if years_list:
+            q = q.in_("year", years_list)
+        q = q.order("year", desc=False).range(offset, offset + page_size - 1)
+        result = q.execute()
+        rows = result.data or []
+        shots = [{
+            "LOC_X": row["loc_x"],
+            "LOC_Y": row["loc_y"],
+            "SHOT_MADE_FLAG": row["shot_made_flag"],
+            "SHOT_DISTANCE": row["shot_distance"],
+            "SHOT_TYPE": row["shot_type"],
+            "ACTION_TYPE": row["action_type"],
+            "YEAR": row["year"],
+        } for row in rows]
+        return {"shots": shots, "page": page, "page_size": page_size, "count": len(shots)}
+    except Exception as e:
+        print(f"Error fetching paged shots: {e}")
+        return {"shots": [], "page": page, "page_size": page_size, "count": 0}
+
+
+@app.post("/api/player/shots/bins")
+def get_player_shots_binned(req: ShotsBinsRequest):
+    """Return binned shot counts/makes to speed up heatmaps."""
+    supabase = get_supabase()
+    years_list = req.years
+    try:
+        q = supabase.table("shots").select(
+            "loc_x, loc_y, shot_made_flag"
+        ).eq("player_name", req.player_name)
+        if years_list:
+            q = q.in_("year", years_list)
+        q = q.limit(60000)
+        result = q.execute()
+        rows = result.data or []
+        if not rows:
+            return {"bins": []}
+        
+        xs = [r["loc_x"] for r in rows]
+        ys = [r["loc_y"] for r in rows]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        x_step = (max_x - min_x) / max(req.x_bins, 1)
+        y_step = (max_y - min_y) / max(req.y_bins, 1)
+        bins: dict[tuple[int,int], dict[str,int]] = {}
+        for r in rows:
+            bx = int((r["loc_x"] - min_x) / x_step) if x_step else 0
+            by = int((r["loc_y"] - min_y) / y_step) if y_step else 0
+            key = (bx, by)
+            if key not in bins:
+                bins[key] = {"attempts": 0, "made": 0}
+            bins[key]["attempts"] += 1
+            bins[key]["made"] += int(r["shot_made_flag"] or 0)
+        out = []
+        for (bx, by), agg in bins.items():
+            out.append({
+                "x_bin": bx,
+                "y_bin": by,
+                "attempts": agg["attempts"],
+                "made": agg["made"],
+                "fg_pct": agg["made"] / agg["attempts"] if agg["attempts"] else 0,
+            })
+        return {
+            "bins": out,
+            "x_bins": req.x_bins,
+            "y_bins": req.y_bins,
+            "x_range": [min_x, max_x],
+            "y_range": [min_y, max_y],
+        }
+    except Exception as e:
+        print(f"Error fetching binned shots: {e}")
+        return {"bins": []}
 
 
 @app.post("/api/compare")

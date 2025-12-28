@@ -28,7 +28,7 @@ export function PlayerSearch({
       setError(null);
       const requestId = ++activeRequest.current;
       try {
-        const res = await getPlayers(debouncedQuery, 100);
+        const res = await getPlayers(debouncedQuery, 50);
         // Ignore stale responses that return after a newer query
         if (requestId === activeRequest.current) {
           setPlayers(res.players);

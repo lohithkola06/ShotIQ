@@ -41,6 +41,7 @@ export function PredictPanel() {
   const [action, setAction] = useState<string>("Jump Shot");
   const [probability, setProbability] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [shotAnim, setShotAnim] = useState<{ id: number; result: "make" | "miss" } | null>(null);
 
   // Calculate distance and shot type
   const distance = Math.sqrt(position.x ** 2 + (position.y - COURT.rimY) ** 2);
@@ -100,6 +101,8 @@ export function PredictPanel() {
         ACTION_TYPE: action,
       });
       setProbability(result.probability_make);
+      const made = Math.random() < result.probability_make;
+      setShotAnim({ id: Date.now(), result: made ? "make" : "miss" });
     } catch (err) {
       console.error(err);
     } finally {
@@ -138,6 +141,15 @@ export function PredictPanel() {
           </div>
           
           <div className="predict-court-container">
+            {shotAnim && (
+              <div className="predict-anim-layer" key={shotAnim.id}>
+                <div className={`predict-ball predict-ball--${shotAnim.result}`}>
+                  <div className="predict-ball__inner">
+                    {shotAnim.result === "make" ? "✓" : "✗"}
+                  </div>
+                </div>
+              </div>
+            )}
             <svg
               viewBox="-250 -50 500 470"
               className="predict-court-svg"
