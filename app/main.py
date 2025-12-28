@@ -102,7 +102,13 @@ def get_redis() -> Optional["Redis"]:
     if url.startswith("redis://") and "redislabs.com" in url:
         url = url.replace("redis://", "rediss://", 1)
     try:
-        client = Redis.from_url(url, decode_responses=True)
+        use_ssl = url.startswith("rediss://")
+        client = Redis.from_url(
+            url,
+            decode_responses=True,
+            ssl=use_ssl,
+            ssl_cert_reqs=None if use_ssl else None,  # accept provider certs without validation issues
+        )
         client.ping()  # quick validation
         return client
     except Exception as e:
