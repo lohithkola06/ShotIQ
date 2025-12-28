@@ -7,7 +7,6 @@ A machine learning-powered web application that predicts NBA shot success probab
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)
 ![XGBoost](https://img.shields.io/badge/XGBoost-ML-orange.svg)
 ![Supabase](https://img.shields.io/badge/Data-Supabase-3FCF8E.svg)
-![Redis](https://img.shields.io/badge/Cache-Redis-DC382D.svg)
 
 ## 🎯 What is ShotIQ?
 
@@ -191,7 +190,6 @@ Visit `http://localhost:5173` to see the app!
 
 ### Production notes
 - **Supabase**: set `SUPABASE_URL` and `SUPABASE_KEY` (service role) so the API can read the `shots` table and call the RPCs.
-- **Redis caching**: set `REDIS_URL` (e.g., Upstash/Redis Cloud) to cache players/years/stats responses for faster first-loads. If unset, the API falls back to an in-process cache.
 - **Model file**: ensure `models/shot_model_xgb.pkl` is present in the deploy.
 - **Shots paging/binning**: for large careers, use the paged or binned shots endpoints to keep charts fast (see API section).
 
@@ -220,7 +218,7 @@ Visit `http://localhost:5173` to see the app!
 | `/api/years` | GET | Get available seasons |
 | `/api/compare` | POST | Compare two players |
 | **Data** |  | Stored in Supabase (`shots` table + RPCs `get_players_with_stats`, `get_player_stats`, `get_available_years`) |
-| **Cache** |  | Redis (optional). Set `REDIS_URL` to cache common reads. Falls back to in-process cache if unset. |
+| **Cache** |  | In-process caching on the API for common reads. |
 
 ### Example: Predict a Shot
 
