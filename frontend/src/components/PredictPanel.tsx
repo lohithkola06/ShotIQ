@@ -85,7 +85,8 @@ export function PredictPanel() {
     
     // Convert to feet and clamp
     const xFeet = Math.max(-25, Math.min(25, x / 10));
-    const yFeet = Math.max(-5, Math.min(42, y / 10));
+    // clamp y to [0, 42] to prevent below-baseline selections
+    const yFeet = Math.max(0, Math.min(42, y / 10));
     
     setPosition({ x: xFeet, y: yFeet });
   };
@@ -260,9 +261,13 @@ export function PredictPanel() {
                 <input
                   type="number"
                   value={position.y.toFixed(1)}
-                  onChange={(e) => setPosition({ ...position, y: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    const yVal = Number.isFinite(val) ? Math.max(0, Math.min(42, val)) : 0;
+                    setPosition({ ...position, y: yVal });
+                  }}
                   step="0.5"
-                  min="-5"
+                  min="0"
                   max="42"
                   className="predict-coord-input"
                 />
@@ -270,8 +275,12 @@ export function PredictPanel() {
               <input
                 type="range"
                 value={position.y}
-                onChange={(e) => setPosition({ ...position, y: parseFloat(e.target.value) })}
-                min="-5"
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  const yVal = Number.isFinite(val) ? Math.max(0, Math.min(42, val)) : 0;
+                  setPosition({ ...position, y: yVal });
+                }}
+                min="0"
                 max="42"
                 step="0.5"
                 className="predict-slider"
