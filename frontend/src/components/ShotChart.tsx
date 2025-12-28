@@ -1,9 +1,8 @@
 import { useState, useCallback } from "react";
-import { Shot, ShotBinsResponse } from "../api";
+import { Shot } from "../api";
 
 interface ShotChartProps {
-  shots?: Shot[];
-  bins?: ShotBinsResponse | null;
+  shots: Shot[];
 }
 
 // NBA Court dimensions in feet (official measurements)
@@ -21,58 +20,33 @@ const COURT = {
   threePointSideDistance: 22,
 };
 
-type TooltipState =
-  | { kind: "shot"; shot: Shot; x: number; y: number }
-  | { kind: "bin"; bin: { attempts: number; made: number; fg_pct: number }; x: number; y: number };
-
-export function ShotChart({ shots = [], bins }: ShotChartProps) {
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+export function ShotChart({ shots }: ShotChartProps) {
+  const [tooltip, setTooltip] = useState<{
+    shot: Shot;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const handleMouseEnter = useCallback(
-    (shot: Shot, event: React.MouseEvent<SVGCircleElement, MouseEvent>, idx: number) => {
-      const svgRect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
-      if (svgRect) {
-        setTooltip({
-          kind: "shot",
-          shot,
-          x: event.clientX - svgRect.left + 12,
-          y: event.clientY - svgRect.top + 12,
-        });
-      }
-      setHoveredIdx(idx);
+    (shot: Shot, event: React.MouseEvent) => {
+      setTooltip({
+        shot,
+        x: event.clientX + 12,
+        y: event.clientY + 12,
+      });
     },
     []
   );
 
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
-    setHoveredIdx(null);
   }, []);
-
-  const handleBinEnter = useCallback(
-    (
-      bin: { attempts: number; made: number; fg_pct: number },
-      event: React.MouseEvent<SVGRectElement, MouseEvent>
-    ) => {
-      const svgRect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
-      if (svgRect) {
-        setTooltip({
-          kind: "bin",
-          bin,
-          x: event.clientX - svgRect.left + 12,
-          y: event.clientY - svgRect.top + 12,
-        });
-      }
-    },
-    []
-  );
 
   // Scale: 1 foot = 10 SVG units
   const S = 10;
   
-  // Court height we want to show (up to half court)
-  const courtViewHeight = 47;
+  // Court height we want to show (up to ~42 feet from baseline)
+  const courtViewHeight = 42;
   
   // Viewbox dimensions
   const viewBoxX = (-COURT.width / 2) * S;
@@ -101,38 +75,17 @@ export function ShotChart({ shots = [], bins }: ShotChartProps) {
         viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}`}
         preserveAspectRatio="xMidYMid meet"
       >
-        <defs>
-          <linearGradient id="courtGradient" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#11131c" />
-            <stop offset="100%" stopColor="#0c1017" />
-          </linearGradient>
-          <radialGradient id="rimGlow" cx="50%" cy="0%" r="60%">
-            <stop offset="0%" stopColor="rgba(255,107,44,0.45)" />
-            <stop offset="100%" stopColor="rgba(255,107,44,0)" />
-          </radialGradient>
-          <filter id="shotShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="rgba(0,0,0,0.5)" />
-          </filter>
-        </defs>
-
         {/* Court surface */}
         <rect
           x={viewBoxX}
           y={viewBoxY}
           width={viewBoxW}
           height={viewBoxH}
-          fill="url(#courtGradient)"
-        />
-        <rect
-          x={viewBoxX}
-          y={viewBoxY}
-          width={viewBoxW}
-          height={viewBoxH}
-          fill="url(#rimGlow)"
+          fill="#1a1a22"
         />
 
         {/* === COURT LINES === */}
-        <g stroke="#2f3545" strokeWidth={2} fill="none">
+        <g stroke="#3a3a50" strokeWidth={2} fill="none">
           
           {/* Baseline at y=0 (top of court view) */}
           <line 
@@ -225,7 +178,7 @@ export function ShotChart({ shots = [], bins }: ShotChartProps) {
           y={COURT.backboardFromBaseline * S - 3} 
           width={6 * S} 
           height={5} 
-          fill="#6b7280"
+          fill="#555"
           rx={1}
         />
         
@@ -239,65 +192,28 @@ export function ShotChart({ shots = [], bins }: ShotChartProps) {
           strokeWidth={3}
         />
 
-        {/* === SHOTS (BINS or DOTS) === */}
-        {bins && bins.bins.length > 0 ? (
-          (() => {
-            const xStep = (bins.x_range[1] - bins.x_range[0]) / bins.x_bins;
-            const yStep = (bins.y_range[1] - bins.y_range[0]) / bins.y_bins;
-            const maxAttempts = Math.max(...bins.bins.map((b) => b.attempts));
-            const fgToColor = (fg: number) => {
-              const clamped = Math.max(0, Math.min(1, fg));
-              const r = Math.round(255 * (1 - clamped));
-              const g = Math.round(255 * clamped);
-              return `rgba(${r},${g},120,0.8)`;
-            };
-            return bins.bins.map((b, idx) => {
-              const x = (bins.x_range[0] + b.x_bin * xStep) * S;
-              const y = (bins.y_range[0] + b.y_bin * yStep) * S;
-              const width = xStep * S;
-              const height = yStep * S;
-              const scale = 0.4 + 0.6 * (b.attempts / maxAttempts || 0);
-              return (
-                <rect
-                  key={idx}
-                  x={x}
-                  y={y}
-                  width={width}
-                  height={height}
-                  fill={fgToColor(b.fg_pct)}
-                  fillOpacity={0.85 * scale}
-                  stroke="rgba(255,255,255,0.04)"
-                  strokeWidth={1}
-                  onMouseEnter={(e) => handleBinEnter(b, e)}
-                  onMouseLeave={handleMouseLeave}
-                />
-              );
-            });
-          })()
-        ) : (
-          shots.map((shot, idx) => {
-            const isMade = shot.SHOT_MADE_FLAG === 1;
-            return (
-              <circle
-                key={idx}
-                className={`shot-dot ${isMade ? "shot-dot--made" : "shot-dot--missed"} ${
-                  hoveredIdx === idx ? "shot-dot--active" : ""
-                }`}
-                cx={shot.LOC_X * S}
-                cy={shot.LOC_Y * S}
-                r={4.4}
-                onMouseEnter={(e) => handleMouseEnter(shot, e, idx)}
-                onMouseLeave={handleMouseLeave}
-                filter="url(#shotShadow)"
-              />
-            );
-          })
-        )}
+        {/* === SHOT DOTS === */}
+        {shots.map((shot, idx) => (
+          <circle
+            key={idx}
+            className="shot-dot"
+            cx={shot.LOC_X * S}
+            cy={shot.LOC_Y * S}
+            r={4}
+            fill={shot.SHOT_MADE_FLAG === 1 ? "#00ff88" : "#ff3366"}
+            fillOpacity={0.7}
+            stroke={shot.SHOT_MADE_FLAG === 1 ? "#00ff88" : "#ff3366"}
+            strokeWidth={1}
+            strokeOpacity={0.4}
+            onMouseEnter={(e) => handleMouseEnter(shot, e)}
+            onMouseLeave={handleMouseLeave}
+          />
+        ))}
       </svg>
 
       {/* Tooltip */}
-      {tooltip && tooltip.kind === "shot" && (
-        <div className="tooltip tooltip--inset" style={{ left: tooltip.x, top: tooltip.y }}>
+      {tooltip && (
+        <div className="tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
           <div className="tooltip__title">
             {tooltip.shot.SHOT_MADE_FLAG === 1 ? "✓ Made" : "✗ Missed"}
           </div>
@@ -316,49 +232,16 @@ export function ShotChart({ shots = [], bins }: ShotChartProps) {
         </div>
       )}
 
-      {tooltip && tooltip.kind === "bin" && (
-        <div className="tooltip tooltip--inset" style={{ left: tooltip.x, top: tooltip.y }}>
-          <div className="tooltip__title">Zone Summary</div>
-          <div className="tooltip__row">
-            <span>Attempts</span>
-            <span>{tooltip.bin.attempts}</span>
-          </div>
-          <div className="tooltip__row">
-            <span>FG%</span>
-            <span>{(tooltip.bin.fg_pct * 100).toFixed(1)}%</span>
-          </div>
-        </div>
-      )}
-
       {/* Legend */}
       <div className="legend">
-        {bins && bins.bins.length > 0 ? (
-          <>
-            <div className="legend-item">
-              <div className="legend-dot legend-dot--missed" />
-              <span>Lower FG%</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-dot legend-dot--made" />
-              <span>Higher FG%</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="legend-item">
-              <div className="legend-dot legend-dot--made" />
-              <span>Made</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-dot legend-dot--missed" />
-              <span>Missed</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-dot legend-dot--active" />
-              <span>Hover</span>
-            </div>
-          </>
-        )}
+        <div className="legend-item">
+          <div className="legend-dot legend-dot--made" />
+          <span>Made</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-dot legend-dot--missed" />
+          <span>Missed</span>
+        </div>
       </div>
     </div>
   );

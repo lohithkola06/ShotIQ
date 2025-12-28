@@ -90,7 +90,6 @@ export type ShotBinsResponse = {
   x_range: [number, number];
   y_range: [number, number];
 };
-
 const API_BASE = "/api";
 
 // Simple in-memory caches to reduce repeat network calls
@@ -177,24 +176,6 @@ export async function getPlayerShots(playerName: string, years?: number[], limit
     const res = await fetch(`${API_BASE}/player/${encodeURIComponent(playerName)}/shots?${params}`);
     if (!res.ok) throw new Error(`getPlayerShots failed: ${res.status}`);
     return res.json() as Promise<{ shots: Shot[]; total: number }>;
-  });
-}
-
-export async function getPlayerShotsBinned(
-  playerName: string,
-  years?: number[],
-  x_bins: number = 30,
-  y_bins: number = 24
-) {
-  const key = `${playerName}|bins|${years?.join(",") || "all"}|${x_bins}|${y_bins}`;
-  return memoize(cache.playerShots, key, async () => {
-    const res = await fetch(`${API_BASE}/player/shots/bins`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ player_name: playerName, years, x_bins, y_bins }),
-    });
-    if (!res.ok) throw new Error(`getPlayerShotsBinned failed: ${res.status}`);
-    return res.json() as Promise<ShotBinsResponse>;
   });
 }
 
