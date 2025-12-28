@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { predictShot, getPlayers } from "../api";
+import { PlayerSearch } from "./PlayerSearch";
+import { Player, predictShot } from "../api";
 
 // Close-range actions (only available within CLOSE_RANGE_DISTANCE)
 const CLOSE_RANGE_ACTIONS = [
@@ -39,23 +40,10 @@ const COURT = {
 export function PredictPanel() {
   const [position, setPosition] = useState({ x: 0, y: 15 });
   const [action, setAction] = useState<string>("Jump Shot");
-  const [selectedPlayer, setSelectedPlayer] = useState<string>("");
-  const [players, setPlayers] = useState<{ name: string }[]>([]);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [probability, setProbability] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [shotAnim, setShotAnim] = useState<{ id: number; result: "make" | "miss" } | null>(null);
-
-  // Load a small player list for selector
-  useEffect(() => {
-    (async () => {
-      try {
-        const { players } = await getPlayers("", 100);
-        setPlayers(players);
-      } catch (err) {
-        console.error("Failed to load players for predict selector", err);
-      }
-    })();
-  }, []);
 
   // Calculate distance and shot type
   const distance = Math.sqrt(position.x ** 2 + (position.y - COURT.rimY) ** 2);
@@ -114,7 +102,7 @@ export function PredictPanel() {
         YEAR: 2024,
         SHOT_TYPE: shotType,
         ACTION_TYPE: action,
-        player_name: selectedPlayer || undefined,
+        player_name: selectedPlayer?.name || undefined,
       });
       setProbability(result.probability_make);
       const made = Math.random() < result.probability_make;
@@ -146,6 +134,81 @@ export function PredictPanel() {
   
   return (
     <div className="predict-panel fade-in">
+      <div className="predict-hero">
+        <div className="predict-hero__content">
+          <div className="predict-hero__eyebrow">Live model • 2024 season tuned</div>
+          <h2>Predict the make odds from any spot</h2>
+          <p>
+            Drop the marker on the court, pick the move, and optionally bias the model toward a specific player.
+            Designed for quick what-if scenarios and heat check debates.
+          </p>
+          <div className="predict-hero__pills">
+            <span className="predict-pill">Distance: {distance.toFixed(1)} ft</span>
+            <span className="predict-pill">{isThreePointer ? "Perimeter arc aware" : "Paint & midrange aware"}</span>
+            <span className="predict-pill">{availableActions.length} action options</span>
+          </div>
+        </div>
+        <div className="predict-hero__glass">
+          <div className="predict-hero__stat">
+            <span>Current profile</span>
+            <div className="predict-hero__stat-value">
+              {selectedPlayer ? selectedPlayer.name : "Global model"}
+            </div>
+            <p className="predict-hero__stat-note">
+              {selectedPlayer
+                ? "Personalized to this player's historical tendencies."
+                : "Blends league-wide shot data for a neutral baseline."}
+            </p>
+          </div>
+          <div className="predict-hero__stat">
+            <span>Shot label</span>
+            <div className={`predict-shot-chip ${isThreePointer ? "three" : "two"}`}>
+              {isThreePointer ? "3PT field goal" : "2PT field goal"}
+            </div>
+            <p className="predict-hero__stat-note">Auto-detected from location.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="predict-player-panel">
+        <div className="predict-player-header">
+          <div>
+            <div className="predict-player-kicker">Player personalization</div>
+            <h3>Search & lock a player</h3>
+            <p className="predict-player-subtitle">
+              Find anyone in the database to nudge probabilities toward their shot profile. Leave blank for neutral.
+            </p>
+          </div>
+          <div className="predict-player-chip">
+            <span className="predict-player-chip__label">Active</span>
+            <span className="predict-player-chip__name">
+              {selectedPlayer ? selectedPlayer.name : "Global model"}
+            </span>
+            {selectedPlayer && (
+              <button
+                className="predict-player-chip__clear"
+                onClick={() => setSelectedPlayer(null)}
+                type="button"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="predict-player-search">
+          <PlayerSearch
+            onSelect={(player) => setSelectedPlayer(player)}
+            selectedPlayer={selectedPlayer ?? undefined}
+            placeholder="Type a name: e.g. Stephen Curry, Nikola Jokic, LeBron James"
+          />
+        </div>
+
+        <div className="predict-player-hint">
+          Selecting a player reweights the model with their historical shot profile; clearing falls back to the global model.
+        </div>
+      </div>
+
       <div className="predict-layout">
         {/* Interactive Court */}
         <div className="predict-court-section">
@@ -315,6 +378,21 @@ export function PredictPanel() {
 
         {/* Controls & Result */}
         <div className="predict-controls-section">
+          <div className="predict-profile-callout">
+            <div>
+              <p className="predict-profile-label">Profile</p>
+              <h4>{selectedPlayer ? selectedPlayer.name : "Global model"}</h4>
+              <p className="predict-profile-note">
+                {selectedPlayer
+                  ? "Using this player's historical tendencies for personalization."
+                  : "Neutral shot profile across all tracked players."}
+              </p>
+            </div>
+            <div className="predict-profile-chip">
+              {isThreePointer ? "Perimeter focus" : isCloseRange ? "Paint pressure" : "Midrange touch"}
+            </div>
+          </div>
+
           <div className="predict-control-group">
             <label>Shot Type <span className="predict-auto-tag">Auto</span></label>
             <div className="predict-shot-type-display">
@@ -354,24 +432,6 @@ export function PredictPanel() {
                 * Dunks, layups & tips require close range (&lt;{COURT.closeRangeDistance}ft)
               </p>
             )}
-          </div>
-
-          <div className="predict-control-group">
-            <label>Player (optional)</label>
-            <select
-              aria-label="Select player for personalized prediction"
-              title="Select player for personalized prediction"
-              className="predict-player-select"
-              value={selectedPlayer}
-              onChange={(e) => setSelectedPlayer(e.target.value)}
-            >
-              <option value="">Global model (all players)</option>
-              {players.slice(0, 100).map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
           </div>
 
           <button 
