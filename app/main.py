@@ -84,10 +84,13 @@ def get_redis() -> Optional["Redis"]:
     """Return Redis client if configured and library present."""
     if not REDIS_URL or Redis is None:
         return None
+    url = REDIS_URL
+    # If the URL uses redis:// but the server expects TLS, allow upgrade to rediss://
+    if url.startswith("redis://") and "redislabs.com" in url:
+        url = url.replace("redis://", "rediss://", 1)
     try:
-        client = Redis.from_url(REDIS_URL, decode_responses=True)
-        # quick ping to validate
-        client.ping()
+        client = Redis.from_url(url, decode_responses=True)
+        client.ping()  # quick validation
         return client
     except Exception as e:
         print(f"Redis unavailable, falling back to in-process cache: {e}")
