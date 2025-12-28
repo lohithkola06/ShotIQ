@@ -2,6 +2,7 @@
 NBA Shot Predictor API - Using Supabase for data storage.
 """
 import os
+import json
 from functools import lru_cache
 from time import monotonic, time
 from typing import Any, Dict, List, Optional, Tuple
@@ -130,6 +131,21 @@ def cache_set(key: str, data: Any, ttl_seconds: int) -> None:
 def _load_players_cache(min_shot_count: int = 10, limit: int = 6000) -> None:
     """Prefetch players once to serve fast, local filtering."""
     supabase = get_supabase()
+    redis_client = get_redis()
+    cache_key = "players_prefetch_v1"
+
+    # Try Redis first
+    if redis_client:
+        try:
+            val = redis_client.get(cache_key)
+            if val:
+                players = json.loads(val)
+                _players_cache["data"] = players
+                _players_cache["fetched_at"] = time()
+                return
+        except Exception as e:
+            print(f"Redis players prefetch read failed: {e}")
+
     try:
         result = supabase.rpc(
             "get_players_with_stats",
@@ -142,6 +158,11 @@ def _load_players_cache(min_shot_count: int = 10, limit: int = 6000) -> None:
         if result.data:
             _players_cache["data"] = result.data
             _players_cache["fetched_at"] = time()
+            if redis_client:
+                try:
+                    redis_client.setex(cache_key, 900, json.dumps(result.data))
+                except Exception as e:
+                    print(f"Redis players prefetch write failed: {e}")
     except Exception as e:
         print(f"Prefetch players cache failed: {e}")
 
@@ -374,6 +395,11 @@ def get_player_shots_page(req: ShotsPageRequest):
     offset = (page - 1) * page_size
     
     years_list = req.years
+    cache_key = f"shots_page|{req.player_name}|{','.join(map(str, years_list)) if years_list else 'all'}|{page}|{page_size}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         q = supabase.table("shots").select(
             "loc_x, loc_y, shot_made_flag, shot_distance, shot_type, action_type, year"
@@ -392,7 +418,9 @@ def get_player_shots_page(req: ShotsPageRequest):
             "ACTION_TYPE": row["action_type"],
             "YEAR": row["year"],
         } for row in rows]
-        return {"shots": shots, "page": page, "page_size": page_size, "count": len(shots)}
+        payload = {"shots": shots, "page": page, "page_size": page_size, "count": len(shots)}
+        cache_set(cache_key, payload, ttl_seconds=600)
+        return payload
     except Exception as e:
         print(f"Error fetching paged shots: {e}")
         return {"shots": [], "page": page, "page_size": page_size, "count": 0}
@@ -403,6 +431,11 @@ def get_player_shots_binned(req: ShotsBinsRequest):
     """Return binned shot counts/makes to speed up heatmaps."""
     supabase = get_supabase()
     years_list = req.years
+    cache_key = f"shots_bins|{req.player_name}|{','.join(map(str, years_list)) if years_list else 'all'}|{req.x_bins}|{req.y_bins}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         q = supabase.table("shots").select(
             "loc_x, loc_y, shot_made_flag"
@@ -439,13 +472,15 @@ def get_player_shots_binned(req: ShotsBinsRequest):
                 "made": agg["made"],
                 "fg_pct": agg["made"] / agg["attempts"] if agg["attempts"] else 0,
             })
-        return {
+        payload = {
             "bins": out,
             "x_bins": req.x_bins,
             "y_bins": req.y_bins,
             "x_range": [min_x, max_x],
             "y_range": [min_y, max_y],
         }
+        cache_set(cache_key, payload, ttl_seconds=900)
+        return payload
     except Exception as e:
         print(f"Error fetching binned shots: {e}")
         return {"bins": []}

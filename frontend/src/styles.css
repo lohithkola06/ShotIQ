@@ -1197,32 +1197,63 @@ body::before {
   inset: 0;
   pointer-events: none;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   z-index: 2;
 }
 
 .predict-ball {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #ffb347, #ff6b2c);
-  box-shadow: 0 8px 18px rgba(0,0,0,0.45), 0 0 18px rgba(255,107,44,0.55);
+  background: radial-gradient(circle at 30% 30%, #ffbf69, #ff6b2c 70%);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.45), 0 0 22px rgba(255,107,44,0.55);
   display: grid;
   place-items: center;
-  animation: shotMake 1s ease-out forwards;
+  animation: shotMake 1.2s ease-out forwards;
+  position: absolute;
+  bottom: 14%;
 }
 
 .predict-ball--miss {
-  background: radial-gradient(circle at 30% 30%, #ff8080, #ff3366);
-  box-shadow: 0 8px 18px rgba(0,0,0,0.45), 0 0 18px rgba(255,51,102,0.55);
-  animation: shotMiss 1s ease-out forwards;
+  background: radial-gradient(circle at 30% 30%, #ff9494, #ff3366 70%);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.45), 0 0 22px rgba(255,51,102,0.55);
+  animation: shotMiss 1.2s ease-out forwards;
 }
 
-.predict-ball__inner {
-  font-size: 0.8rem;
-  font-weight: 800;
-  color: #0d0d12;
+.predict-ball__texture {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: 
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.15), transparent 60%),
+    linear-gradient(90deg, rgba(0,0,0,0.18), rgba(255,255,255,0.08));
+}
+
+.predict-hoop {
+  position: absolute;
+  bottom: 12%;
+  width: 120px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  animation: hoopPop 0.8s ease-out;
+}
+
+.predict-hoop__rim {
+  width: 90px;
+  height: 10px;
+  border: 3px solid #ff6b2c;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(255,107,44,0.6);
+}
+
+.predict-hoop__net {
+  width: 70px;
+  height: 40px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 25%, transparent 25%) -10px 0/20px 20px,
+              linear-gradient(45deg, rgba(255,255,255,0.12) 25%, transparent 25%) -10px 0/20px 20px;
+  mask: radial-gradient(circle at 50% 0, transparent 0, transparent 14px, black 14px);
 }
 
 .predict-shot-type-note {
@@ -1749,13 +1780,21 @@ body::before {
 }
 
 @keyframes shotMake {
-  0% { transform: translateY(80px) scale(1); opacity: 0.9; }
-  50% { transform: translateY(-40px) scale(1.05); opacity: 1; }
-  100% { transform: translateY(0) scale(0.9); opacity: 0; }
+  0% { transform: translate(0, 120px) scale(1); opacity: 1; }
+  40% { transform: translate(0, -40px) scale(1.08); opacity: 1; }
+  70% { transform: translate(0, 0) scale(0.95); opacity: 0.9; }
+  100% { transform: translate(0, 30px) scale(0.8); opacity: 0; }
 }
 
 @keyframes shotMiss {
-  0% { transform: translate(0, 80px) scale(1); opacity: 0.9; }
-  40% { transform: translate(40px, -10px) scale(1.05); opacity: 1; }
-  100% { transform: translate(-20px, 90px) scale(0.8); opacity: 0; filter: grayscale(0.3); }
+  0% { transform: translate(0, 120px) scale(1); opacity: 1; }
+  30% { transform: translate(0, -20px) scale(1.05); opacity: 1; }
+  60% { transform: translate(40px, 20px) rotate(18deg) scale(0.95); opacity: 0.8; }
+  100% { transform: translate(-30px, 120px) rotate(-12deg) scale(0.8); opacity: 0; filter: grayscale(0.4); }
+}
+
+@keyframes hoopPop {
+  0% { transform: scale(0.92); opacity: 0.6; }
+  60% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }

@@ -144,9 +144,11 @@ export function PredictPanel() {
             {shotAnim && (
               <div className="predict-anim-layer" key={shotAnim.id}>
                 <div className={`predict-ball predict-ball--${shotAnim.result}`}>
-                  <div className="predict-ball__inner">
-                    {shotAnim.result === "make" ? "✓" : "✗"}
-                  </div>
+                  <div className="predict-ball__texture" />
+                </div>
+                <div className={`predict-hoop predict-hoop--${shotAnim.result}`}>
+                  <div className="predict-hoop__rim" />
+                  <div className="predict-hoop__net" />
                 </div>
               </div>
             )}
